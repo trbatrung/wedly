@@ -90,7 +90,7 @@ export default function WeddingPage({ params }: { params: { id: string } }) {
           </div>
           {[
             { label: 'Budget', value: `$${(wedding.budget/1000).toFixed(0)}k` },
-            { label: 'Guests', value: wedding.guests },
+            { label: 'Guests', value: wedding.guestCount },
             { label: 'Vendors', value: `${wedding.vendors.filter(v => v.status === 'confirmed').length} confirmed` },
           ].map(s => (
             <div key={s.label} style={{ textAlign: 'right', paddingLeft: 20, borderLeft: '1px solid var(--stone)' }}>
@@ -132,7 +132,7 @@ export default function WeddingPage({ params }: { params: { id: string } }) {
             { href: `/wedding/${wedding.id}/vendors`,  icon: '👥', label: 'View vendors',  sub: `${wedding.vendors.filter(v=>v.status==='confirmed').length} confirmed` },
             { href: `/wedding/${wedding.id}/budget`,   icon: '💰', label: 'Budget tracker', sub: `$${(wedding.budget/1000).toFixed(0)}k total` },
             { href: `/wedding/${wedding.id}/timeline`, icon: '📅', label: 'Day timeline',   sub: `${wedding.timeline.length} events` },
-            { href: `/wedding/${wedding.id}/guests`,   icon: '🎉', label: 'Guest list',     sub: `${wedding.guests} invited` },
+            { href: `/wedding/${wedding.id}/guests`,   icon: '🎉', label: 'Guest list',     sub: `${wedding.guestCount} invited` },
             { href: `/share/${wedding.id}`,            icon: '🔗', label: 'Couple portal',  sub: 'Read-only view' },
           ].map(q => (
             <Link key={q.href} href={q.href} style={{ flex: 1, background: 'var(--cream)', border: '1px solid var(--stone)', borderRadius: 10, padding: '14px 16px', textDecoration: 'none', transition: 'border-color 0.15s, transform 0.1s' }}>

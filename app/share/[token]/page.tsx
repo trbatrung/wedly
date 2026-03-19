@@ -32,7 +32,7 @@ export default function SharePage({ params }: { params: { token: string } }) {
             <span style={{ fontSize: 12, color: 'var(--stone-mid)', letterSpacing: 1, textTransform: 'uppercase' }}>Your wedding portal</span>
           </div>
           <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 56, color: 'var(--cream)', fontWeight: 300, fontStyle: 'italic', marginBottom: 10 }}>{wedding.couple}</h1>
-          <p style={{ fontSize: 16, color: 'var(--stone-mid)' }}>{wedding.date} · {wedding.daysAway} days away · {wedding.guests} guests</p>
+          <p style={{ fontSize: 16, color: 'var(--stone-mid)' }}>{wedding.date} · {wedding.daysAway} days away · {wedding.guestCount} guests</p>
           <div style={{ marginTop: 28, maxWidth: 400, margin: '28px auto 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--stone-mid)', marginBottom: 8 }}>
               <span>Planning progress</span><span style={{ color: wedding.color }}>{wedding.progress}%</span>
