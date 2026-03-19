@@ -151,18 +151,19 @@ export default function Home() {
         <p style={{ fontSize: 17, color: 'var(--ink-muted)', marginBottom: 52, maxWidth: 520, lineHeight: 1.65 }}>Built specifically for weddings — not adapted from a generic tool.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'var(--stone)', border: '1px solid var(--stone)', borderRadius: 16, overflow: 'hidden' }}>
           {[
-            { icon: '⬛', bg: 'var(--sage-light)',  title: 'Kanban task board',    body: 'See every task for every wedding at a glance. Drag from "to do" to "done" — nothing falls through.' },
-            { icon: '👥', bg: 'var(--blush-light)', title: 'Vendor management',     body: 'All vendors in one place per wedding. Contacts, quotes, contracts, and status — no more digging through email.' },
-            { icon: '📅', bg: 'var(--gold-light)',  title: 'Day-of timeline',       body: 'Build the run-of-show in minutes. Share with vendors so everyone knows exactly where to be and when.' },
-            { icon: '💰', bg: 'var(--gold-light)',  title: 'Budget tracker',        body: 'Set a budget, track every expense by category. Your client always knows where their money is going.' },
-            { icon: '🎉', bg: 'var(--sage-light)',  title: 'Guest list & RSVPs',    body: 'Manage all guests, dietary needs, and table assignments. No more tabs inside tabs inside tabs.' },
-            { icon: '🔗', bg: 'var(--blush-light)', title: 'Couple sharing portal', body: 'One link gives the couple a live, beautiful view of their wedding — read-only, no account needed.' },
+            { icon: '⬛', bg: 'var(--sage-light)',  title: 'Kanban task board',    body: 'See every task for every wedding at a glance. Drag from "to do" to "done" — nothing falls through.',      href: '/wedding/anderson-kim' },
+            { icon: '👥', bg: 'var(--blush-light)', title: 'Vendor management',     body: 'All vendors in one place per wedding. Contacts, quotes, contracts, and status — no more digging through email.', href: '/wedding/anderson-kim/vendors' },
+            { icon: '📅', bg: 'var(--gold-light)',  title: 'Day-of timeline',       body: 'Build the run-of-show in minutes. Share with vendors so everyone knows exactly where to be and when.',      href: '/wedding/anderson-kim/timeline' },
+            { icon: '💰', bg: 'var(--gold-light)',  title: 'Budget tracker',        body: 'Set a budget, track every expense by category. Your client always knows where their money is going.',       href: '/wedding/anderson-kim/budget' },
+            { icon: '🎉', bg: 'var(--sage-light)',  title: 'Guest list & RSVPs',    body: 'Manage all guests, dietary needs, and table assignments. No more tabs inside tabs inside tabs.',            href: '/wedding/anderson-kim/guests' },
+            { icon: '🔗', bg: 'var(--blush-light)', title: 'Couple sharing portal', body: 'One link gives the couple a live, beautiful view of their wedding — read-only, no account needed.',        href: '/share/anderson-kim' },
           ].map(f => (
-            <div key={f.title} style={{ background: 'var(--cream)', padding: '32px 28px' }}>
+            <Link key={f.title} href={f.href} style={{ background: 'var(--cream)', padding: '32px 28px', textDecoration: 'none', display: 'block' }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: f.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 16 }}>{f.icon}</div>
               <h3 style={{ fontSize: 22, marginBottom: 10, color: 'var(--ink)' }}>{f.title}</h3>
               <p style={{ fontSize: 13.5, color: 'var(--ink-muted)', lineHeight: 1.65 }}>{f.body}</p>
-            </div>
+              <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--blush)', fontWeight: 500 }}>See live demo →</div>
+            </Link>
           ))}
         </div>
       </section>
