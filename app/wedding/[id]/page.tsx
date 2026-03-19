@@ -146,3 +146,4 @@ export default function WeddingPage({ params }: { params: { id: string } }) {
     </div>
   )
 }
+ 
