@@ -156,7 +156,7 @@ export default function Home() {
             { icon: '📅', bg: 'var(--gold-light)',  title: 'Day-of timeline',       body: 'Build the run-of-show in minutes. Share with vendors so everyone knows exactly where to be and when.',      href: '/wedding/anderson-kim/timeline' },
             { icon: '💰', bg: 'var(--gold-light)',  title: 'Budget tracker',        body: 'Set a budget, track every expense by category. Your client always knows where their money is going.',       href: '/wedding/anderson-kim/budget' },
             { icon: '🎉', bg: 'var(--sage-light)',  title: 'Guest list & RSVPs',    body: 'Manage all guests, dietary needs, and table assignments. No more tabs inside tabs inside tabs.',            href: '/wedding/anderson-kim/guests' },
-            { icon: '🔗', bg: 'var(--blush-light)', title: 'Couple sharing portal', body: 'One link gives the couple a live, beautiful view of their wedding — read-only, no account needed.',        href: '/share/anderson-kim' },
+            { icon: '🔗', bg: 'var(--blush-light)', title: 'Couple sharing portal', body: 'One link gives the couple a live, beautiful view of their wedding — read-only, no account needed.',        href: 'https://wedly-sepia.vercel.app/share/anderson-kim' },
           ].map(f => (
             <Link key={f.title} href={f.href} style={{ background: 'var(--cream)', padding: '32px 28px', textDecoration: 'none', display: 'block' }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: f.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 16 }}>{f.icon}</div>
