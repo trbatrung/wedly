@@ -1,15 +1,20 @@
-import type { Metadata } from 'next'
-import './globals.css'
+import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'Vowo — Wedding Planning, Reinvented',
-  description: 'The workspace built for wedding planners. Kanban boards, vendor CRM, budgets, timelines, and guest lists — all in one place.',
-}
+  title: "Wedly — Điều phối mọi đám cưới",
+  description:
+    "Không gian làm việc tiếng Việt cho đội ngũ tổ chức tiệc cưới. Quản lý công việc, nhà cung cấp, thanh toán, ảnh trao đổi và sơ đồ bàn tiệc.",
+};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <body>{children}</body>
     </html>
-  )
+  );
 }

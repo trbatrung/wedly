@@ -1,79 +1,72 @@
-# Vowo — Wedding Planning App
+# Wedly — Điều phối mọi đám cưới
 
-## Get running in 3 steps
+Ứng dụng tiếng Việt dành cho đội ngũ tổ chức tiệc cưới. Giao diện dùng chữ sans-serif, số tiền VND, ngày Việt Nam và thiết kế thích ứng với điện thoại.
 
-### 1. Install dependencies
-```bash
-npm install
-```
+## Trải nghiệm ngay
 
-### 2. Run locally
-```bash
+- Trang chủ: https://wedly-sepia.vercel.app
+- Không gian trải nghiệm: https://wedly-sepia.vercel.app/demo
+- GitHub: https://github.com/trbatrung/wedly
+
+Bản trải nghiệm hoạt động ngay, không cần tài khoản. Hồ sơ, công việc, chi phí và sơ đồ được lưu bằng localStorage trên thiết bị hiện tại. Ảnh được lưu trong IndexedDB, không gửi lên máy chủ. Nguồn ảnh hết hạn sau 48 giờ và được dọn khi ứng dụng mở/đang chạy. Đây là bản để đánh giá giao diện, không phải không gian đội ngũ đồng bộ.
+
+## Đã có trong giao diện
+
+- Tổng quan đám cưới, công việc quá hạn, khoản dự kiến thanh toán và cập nhật cần xác nhận.
+- Tạo/sửa/lưu trữ hồ sơ đám cưới; tạo và hoàn thành công việc; phân công cho thành viên.
+- Nhà cung cấp: đang trao đổi, nhận báo giá, thương lượng, đã chốt.
+- Tách báo giá, giá trị thỏa thuận, khoản dự kiến trả và lịch sử thanh toán đã xác nhận.
+- Thả/chọn/dán ảnh; gắn vào một đám cưới; phát hiện ảnh trùng; xem trước; giữ làm chứng từ.
+- Dán nội dung trao đổi để tạo đề xuất có thể sửa. Bộ đọc nội dung trong bản trải nghiệm dựa trên quy tắc rõ ràng, không giả lập AI đọc ảnh.
+- Người dùng kiểm tra đề xuất và xác nhận thanh toán riêng trước khi số tiền được ghi nhận.
+- Sơ đồ bàn tiệc: kích thước phòng theo mét, số bàn, đường kính, số khách mỗi bàn, kích thước sân khấu. Bố trí có tỷ lệ, kéo/thay đổi vị trí bằng số hoặc phím mũi tên, cảnh báo chồng lấn, lưu, tải SVG và in/lưu PDF.
+- Trợ lý điều hướng có sẵn cho bản trải nghiệm; trợ lý Haiku cho đội ngũ được cấu hình.
+- Cổng thông tin khách hàng: thông tin ngày cưới và tiến độ tổng hợp. Không công khai báo giá, thanh toán, ảnh, ghi chú hoặc chi tiết công việc nội bộ.
+
+## Chạy tại máy
+
+Node.js >=20.9.
+
+```sh
+npm ci
 npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000)
-
-### 3. Deploy to Vercel (free, live URL)
-```bash
-npm install -g vercel
-vercel
-```
-That's it — Vercel auto-detects Next.js and deploys.
-
----
-
-## Pages & URLs
-
-| URL | What it is |
-|-----|------------|
-| `/` | Landing page (public marketing site) |
-| `/dashboard` | Planner dashboard — all weddings overview |
-| `/wedding/anderson-kim` | Individual wedding kanban board |
-| `/wedding/anderson-kim/vendors` | Vendor CRM |
-| `/wedding/anderson-kim/budget` | Budget tracker |
-| `/wedding/anderson-kim/timeline` | Day-of timeline |
-| `/wedding/anderson-kim/guests` | Guest list |
-| `/share/anderson-kim` | Couple's read-only portal |
-
-## Project structure
-
-```
-vowo/
-├── app/                        # Next.js App Router pages
-│   ├── page.tsx                # Landing page
-│   ├── layout.tsx              # Root layout (fonts, metadata)
-│   ├── globals.css             # Global styles + CSS variables
-│   ├── dashboard/page.tsx      # Planner dashboard
-│   ├── wedding/[id]/           # Dynamic wedding workspace
-│   │   ├── page.tsx            # Kanban board
-│   │   ├── vendors/page.tsx    # Vendor CRM
-│   │   ├── budget/page.tsx     # Budget tracker
-│   │   ├── timeline/page.tsx   # Day timeline
-│   │   └── guests/page.tsx     # Guest list
-│   └── share/[token]/page.tsx  # Couple read-only portal
-├── components/
-│   ├── Sidebar.tsx             # App sidebar (all app pages)
-│   └── Nav.tsx                 # Marketing nav
-└── lib/
-    └── data.ts                 # Mock data (replace with DB later)
+npm run typecheck
+npm test
+npm run build
 ```
 
-## Adding a new wedding
+## Kết nối tài khoản, dữ liệu thật và AI
 
-In `lib/data.ts`, add a new object to the `weddings` array with a unique `id`.
-That ID becomes the URL: `/wedding/your-id`.
+Chưa cấu hình các dịch vụ này thì đăng nhập hiển thị trạng thái đang chuẩn bị; bản trải nghiệm vẫn dùng được. Không có AI/đồng bộ tự động nếu chưa thiết lập.
 
-## Next steps when ready to go real
+1. Tạo một dự án Supabase và chạy `supabase/schema.sql` trong SQL Editor của dự án mới.
+2. Trong Supabase Auth, đặt Site URL là `https://wedly-sepia.vercel.app`; cho phép redirect `https://wedly-sepia.vercel.app/auth/callback` (và `http://localhost:3000/auth/callback` khi phát triển). Cấu hình SMTP cho đăng nhập email trước khi triển khai cho đội ngũ thật.
+3. Thêm biến môi trường vào Vercel (tên trong `.env.example`). Không đưa giá trị bí mật vào Git:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` — chỉ trên máy chủ
+   - `ANTHROPIC_API_KEY` — chỉ trên máy chủ
+   - `ANTHROPIC_MODEL` — mặc định `claude-haiku-5-5`; thay bằng model đã được cấp quyền trên tài khoản nếu cần
+   - `CRON_SECRET` — chuỗi ngẫu nhiên dài, chỉ trên máy chủ
+4. Triển khai lại sau khi thêm biến môi trường. Đăng nhập email, tạo đội ngũ và dùng liên kết mời tại màn hình Đội ngũ.
+5. Bật pg_cron, pg_net và Vault trong Supabase. Tạo secret Vault `wedly_site_url` và `wedly_cron_secret` (giá trị trùng `CRON_SECRET`), sau đó chạy `supabase/cleanup.sql`.
+6. Kiểm tra job trong `cron.job_run_details` và gọi `/api/cleanup` với header Authorization hợp lệ để xác minh xóa file thực tế trước khi nhận ảnh thật.
 
-1. **Auth** — Add [NextAuth.js](https://next-auth.js.org/) for planner login
-2. **Database** — Replace `lib/data.ts` with [Supabase](https://supabase.com/) (free Postgres)
-3. **File uploads** — Add [Uploadthing](https://uploadthing.com/) for contracts/images
-4. **Emails** — Add [Resend](https://resend.com/) for vendor outreach templates
+Ảnh được lưu trong bucket **riêng tư**. API xác minh đăng nhập, đội ngũ và thời hạn trước khi đọc ảnh. Sau đúng 48 giờ, ảnh không được đọc hay giữ lại mới. Worker thử xóa file vật lý mỗi 5 phút; xóa lỗi được thử lại. Metadata chỉ được đánh dấu đã xóa sau khi Storage API thành công. Thông tin có cấu trúc và trích đoạn ngắn đã xác nhận vẫn được giữ. Không xóa trực tiếp dòng `storage.objects`, vì thao tác đó không xóa file vật lý.
 
-## Tech stack
+Không có job Vercel theo phút trong cấu hình: Vercel Hobby chỉ cho lịch hằng ngày. Job trong Supabase đáp ứng chu kỳ dọn 5 phút. Nếu chưa cấu hình job, việc xóa vật lý chưa tự động hoạt động.
 
-- **Next.js 14** — App Router, file-based routing
-- **TypeScript** — Type safety
-- **Tailwind CSS** — Utility styles
-- **Vercel** — Hosting (free tier)
-- **Cormorant Garamond + DM Sans** — Typography
+## Cấu trúc & giới hạn bản đầu
+
+Next.js 16 / React 19 / TypeScript / Tailwind / Supabase / Anthropic Messages API.
+
+- `lib/domain.ts`: phân biệt báo giá/thỏa thuận/thanh toán; xác nhận và kiểm tra trùng nguồn/giao dịch.
+- `lib/floorplan.ts`: sinh bố trí theo kích thước thực, giới hạn vật thể trong phòng.
+- `components/Workspace.tsx`: không gian chung, lưu dữ liệu và điều hướng.
+- `app/api/`: phiên đăng nhập, hồ sơ, ảnh, phân tích, trợ lý và dọn ảnh.
+- `supabase/`: chính sách RLS, revision cho cập nhật đồng thời, lời mời đội ngũ, quota AI và lịch dọn.
+- `tests/domain.test.ts`: kiểm tra trạng thái tiền, xác nhận, nguồn trùng, hạn ảnh và hình học.
+
+Mỗi tài khoản thuộc một đội ngũ. Cập nhật dùng revision: khi hai người cùng sửa, phiên cũ bị từ chối thay vì ghi đè âm thầm. Chủ đội ngũ tạo liên kết mời; liên kết mới thay thế liên kết cũ và hết hạn sau 7 ngày. Giới hạn ban đầu 100 lượt AI và 100 ảnh/ngày/đội ngũ. Cần kiểm tra lượng sử dụng thực tế trước khi bán gói.
+
+Chưa có đồng bộ nhóm Zalo cá nhân, email/Sheets trực tiếp, nhập danh sách khách, lịch trình phút theo phút, phê duyệt từ cô dâu/chú rể, thanh toán thuê bao hay chứng nhận an toàn mặt bằng. Sơ đồ là công cụ bố trí đơn giản; khoảng trống quanh bàn và lối đi vẫn cần được đội ngũ kiểm tra tại địa điểm thực tế.
