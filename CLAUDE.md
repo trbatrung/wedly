@@ -12,3 +12,5 @@ Product priorities: Vietnamese throughout, readable sans-serif UI, convenient te
 Never print raw Git remotes or credentials. Never commit secrets. Distinguish working demo interactions from services that still need account configuration.
 
 After work, update `docs/HANDOFF.md` with the changes, checks actually run, remaining blockers and next concrete steps. Keep the handoff short and factual so either Claude Code or Codex can resume from it.
+
+The owner’s 15%-remaining usage stop rule applies only to GPT/Codex. Claude Code must not inherit that rule or stop because of the GPT allowance.

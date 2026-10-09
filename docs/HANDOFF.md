@@ -44,7 +44,7 @@ Implemented: shorter navigation and page headings, personal home greeting, compa
 
 Build, typecheck and all 12 business/geometry tests passed for this refinement. Browser checks covered desktop and 390px mobile navigation/overflow, sample screenshot review, and unchanged paid totals after confirming a planned deposit. Real AI/data services remain unconfigured.
 
-Usage preference: check the account allowance during substantial work when that information is available. Stop and save a clear handoff when either Codex usage window reaches 15% remaining. Latest check during this pass was 58% short-window and 77% weekly remaining; this was not a budget stop. Do not invent allowance figures when another agent cannot read them.
+Usage preference: GPT/Codex only must check its account allowance during substantial work when that information is available, and stop with a clear handoff when either Codex usage window reaches 15% remaining. The owner explicitly exempted Claude Code from this rule. Latest check during this pass was 58% short-window and 77% weekly remaining; this was not a budget stop. Do not invent allowance figures when another agent cannot read them.
 
 ## Validation and active work
 
