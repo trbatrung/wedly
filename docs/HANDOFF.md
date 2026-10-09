@@ -15,7 +15,10 @@ The owner requested clear sans-serif typography with no cursive, and a built-in 
 - GitHub: https://github.com/trbatrung/wedly (existing public repository, verified).
 - Vercel project: `wedly`, account/team `trbatrungs-projects`.
 - Production domain: https://wedly-sepia.vercel.app.
-- Rebuild branch: `codex/vietnamese-rebuild`.
+- Current branch: `main`. Rebuild preserved on `codex/vietnamese-rebuild`.
+- Release code commit: `71404b04c6c0260fc78791b471de4733b8f9ab3a`, pushed to GitHub via existing SSH authentication.
+- Vercel production deployment: `dpl_GDxjY6QGaqq548ub8rwqAvwT6RBh`, READY, aliased to the production domain.
+- The expired HTTPS credential was replaced with the existing GitHub SSH remote. `git push origin main` now works.
 - Vercel environment variables were empty when checked. Supabase and Anthropic account setup remains necessary for live features.
 - No secret values are stored in these files. Do not print `git remote -v`; the current remote can include embedded credentials.
 
@@ -44,7 +47,7 @@ An interrupted attempt to move the old dependencies may have left a partial dire
 ## Next concrete steps
 
 1. Typecheck/build, 12 tests and desktop/mobile QA are complete.
-2. Approved rebuild is being pushed and deployed to existing Vercel production; record final deployment verification here.
+2. Approved rebuild is pushed to main and deployed to existing Vercel production. Production `/demo` returns HTTP 200; invalid share links return 404.
 3. With the owner, configure Supabase/Anthropic environment variables and SMTP, run schema/cleanup setup, and test tenant isolation/real screenshot analysis/physical expiry against live services.
 4. Recruit one planner team for a pilot with three weddings. Measure the full cost of collecting and entering updates, not only AI speed.
 5. Candidate extensions after pilot: minute-by-minute wedding timeline, guest list/import, couple approvals, direct integrations where access is verified, and subscription billing.
