@@ -48,7 +48,7 @@ export default function Assistant({
             "Bạn có thể mở ảnh trao đổi, công việc, thanh toán hoặc sơ đồ bàn tiệc. Bản trải nghiệm dùng điều hướng có sẵn; AI sẽ có khi kết nối đội ngũ.";
         if (/anh|cap nhat|zalo/.test(plain)) {
           view = "inbox";
-          text = "Mở ảnh trao đổi để thêm nguồn và xem cập nhật cần xác nhận.";
+          text = "Mở cập nhật để thêm nguồn và xem cập nhật cần xác nhận.";
         } else if (/so do|ban tiec|mat bang/.test(plain)) {
           view = "floorplan";
           text =
@@ -122,17 +122,14 @@ export default function Assistant({
             </button>
           </div>
           <div className="assistant-body">
-            <div className="assistant-message">
-              Bạn muốn xem gì hoặc xử lý việc nào? Mình giúp bạn tìm đúng hồ sơ
-              và bước tiếp theo.
-            </div>
+            <div className="assistant-message">Bạn cần làm gì?</div>
             {!messages.length && (
               <div className="assistant-chips">
                 {[
-                  "Hôm nay có việc gì cần xử lý?",
-                  "Mở ảnh trao đổi",
-                  "Xem các khoản cần thanh toán",
-                  "Mở sơ đồ bàn tiệc",
+                  "Việc hôm nay",
+                  "Mở cập nhật",
+                  "Xem thanh toán",
+                  "Mở sơ đồ tiệc",
                 ].map((prompt) => (
                   <button key={prompt} onClick={() => void send(prompt)}>
                     {prompt}

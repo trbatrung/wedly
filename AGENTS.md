@@ -6,6 +6,8 @@ Read `docs/HANDOFF.md` and `README.md` before starting. These files are the shar
 
 - Fully Vietnamese product UI, errors, help, notifications and assistant output. Use VND and Asia/Ho_Chi_Minh dates. Keep source identifiers in English.
 - Professional wedding planning teams are the customer, handling many weddings between November and before Tết. Convenience during hectic work is the first priority.
+- Keep operational UI copy brief: short headings, compact task/item rows, details on demand. Edge8 Team portal is a design reference for hierarchy and density only; never copy its private company data or staff images.
+- Check account usage during substantial work and wrap up with code/handoff saved when either usage window reaches 15% remaining (owner preference).
 - Use legible sans-serif typography throughout. No cursive or decorative italic UI. Clear labels, visible primary actions, useful empty states and responsive layouts.
 - Screenshots are a core entry point: attach to a wedding, extract deal/payment/planning information, review edits, confirm and update the shared workspace.
 - Keep negotiation status separate from payment status. A quote, promised deposit or scheduled payment is never a confirmed payment. Explicit reviewer confirmation is required for money records.

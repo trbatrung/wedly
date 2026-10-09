@@ -1,6 +1,6 @@
 # Wedly handoff
 
-Last updated: 9 October 2026, Vietnam time.
+Last updated: 10 October 2026, Vietnam time.
 
 ## Goal and owner decisions
 
@@ -16,7 +16,7 @@ The owner requested clear sans-serif typography with no cursive, and a built-in 
 - Vercel project: `wedly`, account/team `trbatrungs-projects`.
 - Production domain: https://wedly-sepia.vercel.app.
 - Current branch: `main`. Rebuild preserved on `codex/vietnamese-rebuild`.
-- Release code commit: `71404b04c6c0260fc78791b471de4733b8f9ab3a`, pushed to GitHub via existing SSH authentication.
+- Initial release code commit: `71404b04c6c0260fc78791b471de4733b8f9ab3a`, pushed to GitHub via existing SSH authentication.
 - Vercel production deployment: `dpl_GDxjY6QGaqq548ub8rwqAvwT6RBh`, READY, aliased to the production domain.
 - The expired HTTPS credential was replaced with the existing GitHub SSH remote. `git push origin main` now works.
 - Vercel environment variables were empty when checked. Supabase and Anthropic account setup remains necessary for live features.
@@ -35,6 +35,16 @@ Money safety: separate quote/agreed/planned/paid fields; payment confirmations r
 Floorplan: input meters, round tables/seats, rectangular stage, generate non-overlapping rows, pointer/keyboard/numeric movement within bounds, save with wedding, overlap/capacity indicators, entrance object, SVG export and print/PDF.
 
 Image expiry: deny live reads after 48h; physical deletion requires configured Supabase cron calling `/api/cleanup` every five minutes. Demo cleanup runs while/opening the browser only. Keep chosen evidence explicitly. The 48h deadline is based on upload, not latest view.
+
+## UI refinement — 10 October
+
+The owner said the UI had too much text and supplied their Edge8 Team portal as a reference. Learn its hierarchy and compact rows; do not copy private company content, staff photos or tasks.
+
+Implemented: shorter navigation and page headings, personal home greeting, compact clickable summary strip, four priority task rows first, wedding list rows on the home screen, smaller wedding cards in the directory, dark forest navigation, removal of repeated explanations/promotional panels, shorter screenshot review labels and assistant prompts. Demo status and payment confirmation remain explicit. Modal focus now goes to the first input and remains stable while editing.
+
+Build, typecheck and all 12 business/geometry tests passed for this refinement. Browser checks covered desktop and 390px mobile navigation/overflow, sample screenshot review, and unchanged paid totals after confirming a planned deposit. Real AI/data services remain unconfigured.
+
+Usage preference: check the account allowance during substantial work when that information is available. Stop and save a clear handoff when either Codex usage window reaches 15% remaining. Latest check during this pass was 58% short-window and 77% weekly remaining; this was not a budget stop. Do not invent allowance figures when another agent cannot read them.
 
 ## Validation and active work
 

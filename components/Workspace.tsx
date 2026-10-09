@@ -76,12 +76,12 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 const STORAGE_KEY = "wedly-workspace-v2";
 const navigation: { id: View; label: string; icon: typeof LayoutDashboard }[] =
   [
-    { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
+    { id: "overview", label: "Hôm nay", icon: LayoutDashboard },
     { id: "weddings", label: "Đám cưới", icon: CalendarDays },
-    { id: "inbox", label: "Ảnh trao đổi", icon: ImagePlus },
+    { id: "inbox", label: "Cập nhật", icon: ImagePlus },
     { id: "tasks", label: "Công việc", icon: ListTodo },
-    { id: "payments", label: "Chi phí & thanh toán", icon: Wallet },
-    { id: "floorplan", label: "Sơ đồ bàn tiệc", icon: Grid2X2 },
+    { id: "payments", label: "Chi phí", icon: Wallet },
+    { id: "floorplan", label: "Sơ đồ tiệc", icon: Grid2X2 },
     { id: "team", label: "Đội ngũ", icon: Users },
   ];
 async function request(url: string, options?: RequestInit) {
@@ -716,7 +716,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       );
   const title =
     view === "overview"
-      ? "Hôm nay cần làm gì?"
+      ? `Chào ${memberName || state.members[0]}`
       : selected && view === "weddings"
         ? selected.couple
         : label;
@@ -758,7 +758,11 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
     <div className="app-shell">
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <Logo />
-        <div className="team-switch">
+        <button
+          className="team-switch"
+          onClick={() => go("team")}
+          aria-label="Mở đội ngũ"
+        >
           <span className="avatar" style={{ borderRadius: 7 }}>
             NM
           </span>
@@ -766,9 +770,9 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
             <strong>{state.teamName}</strong>
             <span className="muted">{state.members.length} thành viên</span>
           </div>
-          <ChevronDown size={13} />
-        </div>
-        <p className="sidebar-label">Không gian làm việc</p>
+          <ChevronRight size={13} />
+        </button>
+
         <nav className="side-nav">
           {navigation.map(({ id, label, icon: Icon }) => (
             <button
@@ -786,7 +790,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
         </nav>
         <div className="sidebar-weddings">
           <div className="between sidebar-label">
-            <span>Đám cưới gần đây</span>
+            <span>Đám cưới</span>
             <button
               className="text-link"
               aria-label="Thêm đám cưới"
@@ -807,14 +811,6 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
           ))}
         </div>
         <div className="sidebar-bottom">
-          <div className="sidebar-tip">
-            <Sparkles size={18} style={{ color: "var(--green)" }} />
-            <strong>Đưa trao đổi về đúng chỗ</strong>
-            <p>Thêm một ảnh để đội ngũ nắm rõ thay đổi và việc tiếp theo.</p>
-            <button className="text-link" onClick={() => go("inbox")}>
-              Thêm ảnh trao đổi <ChevronRight size={12} />
-            </button>
-          </div>
           <div className="profile">
             <span className="avatar">
               {(memberName || state.members[0])?.slice(0, 1)}
@@ -823,7 +819,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
               <strong>{memberName || state.members[0]}</strong>
               <small>
                 {demo
-                  ? "Không gian trải nghiệm"
+                  ? "Trải nghiệm"
                   : role === "owner"
                     ? "Chủ đội ngũ"
                     : "Thành viên đội ngũ"}
@@ -868,8 +864,6 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
               <Menu size={18} />
             </button>
             <div className="breadcrumbs">
-              <span>Không gian làm việc</span>
-              <ChevronRight size={12} />
               <strong>{label}</strong>
               {selected && (
                 <>
@@ -896,7 +890,12 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
               />
             </label>
             {demo ? (
-              <span className="demo-pill">Bản trải nghiệm</span>
+              <span
+                className="demo-pill"
+                title="Dữ liệu trải nghiệm lưu trên thiết bị này"
+              >
+                Trải nghiệm
+              </span>
             ) : (
               <button
                 className="icon-button"
@@ -920,48 +919,39 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
           </div>
         </header>
         <main className="page-content">
-          {demo && (
-            <div className="demo-banner">
-              <span>
-                Không gian trải nghiệm · Dữ liệu và ảnh chỉ lưu trên trình duyệt
-                này.
-              </span>
-              <Link href="/login">
-                Tạo đội ngũ thật{" "}
-                <ChevronRight size={11} style={{ verticalAlign: "middle" }} />
-              </Link>
-            </div>
-          )}
           <div className="page-head">
             <div>
+              {view === "overview" && (
+                <div className="home-date">
+                  {new Intl.DateTimeFormat("vi-VN", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "2-digit",
+                    timeZone: "Asia/Ho_Chi_Minh",
+                  }).format(new Date())}
+                </div>
+              )}
               <h1>{title}</h1>
-              <p>
-                {view === "overview"
-                  ? "Nắm tiến độ, xử lý đúng việc. Cùng đội ngũ chuẩn bị một mùa cưới thật trọn vẹn."
-                  : view === "weddings"
-                    ? "Mỗi đám cưới một hồ sơ. Mọi đầu việc đều ở đúng chỗ."
-                    : view === "inbox"
-                      ? "Từ ảnh trao đổi đến thông tin rõ ràng và công việc có người phụ trách."
-                      : view === "tasks"
-                        ? "Theo dõi người phụ trách, hạn xử lý và tiến độ công việc."
-                        : view === "payments"
-                          ? "Phân biệt báo giá, giá đã chốt và khoản thanh toán được xác nhận."
-                          : view === "floorplan"
-                            ? "Nhập kích thước, bố trí bàn tiệc và lưu cùng hồ sơ đám cưới."
-                            : "Cùng một đội ngũ, cùng một không gian làm việc."}
-              </p>
+              {demo && view === "overview" && (
+                <span className="demo-caption">
+                  Dữ liệu mẫu · Lưu trên thiết bị
+                </span>
+              )}
             </div>
             {view === "overview" ? (
-              <span className="heading-date">
-                <CalendarDays size={13} />
-                {new Intl.DateTimeFormat("vi-VN", {
-                  weekday: "short",
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                  timeZone: "Asia/Ho_Chi_Minh",
-                }).format(new Date())}
-              </span>
+              <div className="row home-actions">
+                <button className="btn" onClick={() => go("inbox")}>
+                  <ImagePlus size={15} />
+                  Thêm ảnh
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => openModal("task")}
+                >
+                  <Plus size={15} />
+                  Thêm việc
+                </button>
+              </div>
             ) : view === "tasks" ? (
               <button className="btn primary" onClick={() => openModal("task")}>
                 <Plus size={15} />
@@ -994,6 +984,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                   go={go}
                   onTask={toggleTask}
                   busy={busy}
+                  onNewTask={() => openModal("task")}
                 />
               )}
               {view === "weddings" && !selected && (

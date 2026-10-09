@@ -182,7 +182,7 @@ export default function InboxView({
       <div className="stack">
         <section className="panel">
           <div className="section-head">
-            <h2>Thêm cập nhật</h2>
+            <h2>Thêm ảnh</h2>
             <ImagePlus size={17} className="muted" />
           </div>
           <label className="field" style={{ marginBottom: 15 }}>
@@ -227,61 +227,54 @@ export default function InboxView({
               }}
             />
             <Upload size={29} />
-            <strong>
-              {working ? "Đang xử lý…" : "Thả ảnh hoặc chọn từ máy"}
-            </strong>
-            <p>
-              PNG, JPG, WebP · tối đa 5 MB
-              <br />
-              Có thể dán ảnh bằng Ctrl/Cmd + V
-            </p>
+            <strong>{working ? "Đang xử lý…" : "Chọn hoặc thả ảnh"}</strong>
+            <p>JPG, PNG, WebP · 5 MB · Ctrl/Cmd + V</p>
           </label>
           <div className="retention">
             <ShieldCheck size={13} />
-            {demo
-              ? "Ảnh được lưu trong trình duyệt này"
-              : "Ảnh được lưu riêng tư cho đội ngũ"}
+            {demo ? "Lưu trên thiết bị" : "Chỉ đội ngũ được xem"}
           </div>
           <div className="retention">
             <Clock3 size={13} />
-            Mặc định hết hạn sau 48 giờ
+            Hết hạn sau 48 giờ
           </div>
-          <div className="divider" />
-          <label className="field">
-            Hoặc dán nội dung trao đổi
-            <textarea
-              rows={4}
-              maxLength={12000}
-              placeholder="Ví dụ: Chốt decor 35 triệu, cọc 10 triệu trước 20/11…"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </label>
-          <button
-            className="btn small"
-            style={{ marginTop: 12, width: "100%" }}
-            disabled={disabled || !text.trim() || !target}
-            onClick={() => void addText()}
-          >
-            <FileText size={14} />
-            Tạo đề xuất từ nội dung
-          </button>
-          {demo && (
-            <button
-              className="text-link"
-              style={{ marginTop: 12 }}
-              disabled={disabled || !target}
-              onClick={() => void addText(true)}
-            >
-              Dùng nội dung mẫu <Sparkles size={12} />
-            </button>
-          )}
-          {demo && (
-            <p className="muted" style={{ fontSize: 10, marginTop: 12 }}>
-              Bản trải nghiệm xử lý nội dung bạn nhập. Phân tích ảnh bằng AI sẽ
-              có khi đội ngũ được kết nối.
-            </p>
-          )}
+          <details className="input-details" open={demo || undefined}>
+            <summary>Dán nội dung</summary>
+            <label className="field">
+              <span className="sr-only">Nội dung trao đổi</span>
+              <textarea
+                rows={3}
+                maxLength={12000}
+                placeholder="Chốt decor 35 triệu, cọc 10 triệu trước 20/11…"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </label>
+            <div className="between" style={{ marginTop: 12 }}>
+              <button
+                className="btn small"
+                disabled={disabled || !text.trim() || !target}
+                onClick={() => void addText()}
+              >
+                <FileText size={14} />
+                Tạo đề xuất
+              </button>
+              {demo && (
+                <button
+                  className="text-link"
+                  disabled={disabled || !target}
+                  onClick={() => void addText(true)}
+                >
+                  Dùng mẫu
+                </button>
+              )}
+            </div>
+            {demo && (
+              <p className="field-hint">
+                AI đọc ảnh chưa bật. Dùng nội dung để thử.
+              </p>
+            )}
+          </details>
           {error && (
             <div
               className="notice error"
@@ -294,7 +287,7 @@ export default function InboxView({
         </section>
         <section>
           <div className="section-head">
-            <h2>Cập nhật đã thêm</h2>
+            <h2>Cập nhật</h2>
             <button
               className="text-link"
               onClick={() => setFilter(filter === "all" ? "pending" : "all")}
@@ -349,9 +342,7 @@ export default function InboxView({
           <>
             <div className="review-header">
               <div>
-                <h2>
-                  {reviewed ? "Cập nhật đã xử lý" : "Xem & xác nhận cập nhật"}
-                </h2>
+                <h2>{reviewed ? "Đã xử lý" : "Xác nhận cập nhật"}</h2>
                 <p>
                   {
                     state.weddings.find((w) => w.id === current.weddingId)
@@ -407,8 +398,7 @@ export default function InboxView({
             {!draft && !reviewed && (
               <div style={{ marginTop: 24 }}>
                 <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-                  Đọc ảnh để đề xuất báo giá, khoản thanh toán và công việc. Bạn
-                  kiểm tra trước khi lưu.
+                  Đọc ảnh, kiểm tra rồi xác nhận.
                 </p>
                 <button
                   className="btn primary"
@@ -433,8 +423,7 @@ export default function InboxView({
                 </button>
                 {demo && (
                   <div className="notice" style={{ marginTop: 16 }}>
-                    AI đọc ảnh chưa được bật trong bản trải nghiệm. Dán nội dung
-                    trong ảnh ở bên trái để thử quy trình xác nhận.
+                    AI đọc ảnh chưa bật. Dán nội dung để thử.
                   </div>
                 )}
               </div>
@@ -495,7 +484,7 @@ export default function InboxView({
                       </select>
                     </label>
                     <label className="field">
-                      Trạng thái trao đổi
+                      Trạng thái
                       <select
                         value={draft.dealStatus ?? ""}
                         onChange={(e) =>
@@ -516,7 +505,7 @@ export default function InboxView({
                       </select>
                     </label>
                     <label className="field">
-                      Giá trị đã chốt (₫)
+                      Đã chốt (₫)
                       <input
                         type="number"
                         min="0"
@@ -550,7 +539,7 @@ export default function InboxView({
                       />
                     </label>
                     <label className="field">
-                      Thanh toán tiếp theo (₫)
+                      Sắp trả (₫)
                       <input
                         type="number"
                         min="0"
@@ -567,7 +556,7 @@ export default function InboxView({
                       />
                     </label>
                     <label className="field">
-                      Hạn thanh toán / công việc
+                      Hạn xử lý
                       <input
                         type="date"
                         value={draft.dueDate ?? ""}
@@ -597,7 +586,7 @@ export default function InboxView({
                       </select>
                     </label>
                     <label className="field" style={{ gridColumn: "1/-1" }}>
-                      Công việc cần tạo
+                      Tạo công việc
                       <input
                         maxLength={200}
                         placeholder="Để trống nếu không cần tạo công việc"
@@ -612,7 +601,7 @@ export default function InboxView({
                     </label>
                     {draft.paymentAmount !== null && (
                       <label className="field">
-                        Khoản được thông báo đã trả (₫)
+                        Khoản báo đã trả (₫)
                         <input
                           type="number"
                           min="0"
@@ -657,7 +646,7 @@ export default function InboxView({
                         )
                       }
                     >
-                      Bỏ qua cập nhật
+                      Bỏ qua
                     </button>
                     <button
                       className="btn primary"
