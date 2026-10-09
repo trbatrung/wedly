@@ -54,6 +54,10 @@ The old local dependencies stalled reads. Fresh dependencies are now installed i
 
 An interrupted attempt to move the old dependencies may have left a partial directory at `/private/tmp/wedly-old-dependencies-20261009`; it is not application source. Preserve unrelated tracked `.DS_Store` edits.
 
+## Open branding discussion
+
+The owner finds “Wedly” too generic/crowded and wants a new brand. No replacement name has been selected. Tentative directions: **Nhịp** (coordination/rhythm; preferred), **Nếp** (order/calm), **Nối** (bringing scattered work together). Preserve the Vietnamese-first product and clean sans-serif visual language. Names are creative candidates; domain/name availability is not established. Do not rename the app, repository or hosting project based on a tentative suggestion alone.
+
 ## Next concrete steps
 
 1. Typecheck/build, 12 tests and desktop/mobile QA are complete.
