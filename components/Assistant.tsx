@@ -9,7 +9,7 @@ import {
   Check,
 } from "lucide-react";
 import { normalize, today, money } from "@/lib/domain";
-import type { AssistantResult, Workspace, View } from "@/lib/types";
+import type { AssistantResult, Workspace, View, WeddingTab } from "@/lib/types";
 
 export default function Assistant({
   state,
@@ -21,14 +21,19 @@ export default function Assistant({
   state: Workspace;
   demo: boolean;
   weddingId: string | null;
-  go: (view: View, weddingId?: string | null) => void;
+  go: (view: View, weddingId?: string | null, tab?: WeddingTab) => void;
   onTask: (task: NonNullable<AssistantResult["task"]>) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false),
     [input, setInput] = useState(""),
     [busy, setBusy] = useState(false),
     [messages, setMessages] = useState<
-      { text: string; user?: boolean; action?: AssistantResult }[]
+      {
+        text: string;
+        user?: boolean;
+        action?: AssistantResult;
+        tab?: WeddingTab;
+      }[]
     >([]);
   async function send(value = input) {
     if (!value.trim() || busy) return;
@@ -37,6 +42,7 @@ export default function Assistant({
     setMessages((prev) => [...prev, { text: value, user: true }]);
     try {
       let result: AssistantResult;
+      let tab: WeddingTab | undefined;
       if (demo) {
         const plain = normalize(value);
         const wedding =
@@ -46,7 +52,13 @@ export default function Assistant({
         let view: View = "overview",
           text =
             "Bạn có thể mở ảnh trao đổi, công việc, thanh toán hoặc sơ đồ bàn tiệc. Bản trải nghiệm dùng điều hướng có sẵn; AI sẽ có khi kết nối đội ngũ.";
-        if (/anh|cap nhat|zalo/.test(plain)) {
+        if (/thiep|khach (moi|xac nhan)|tham du|rsvp/.test(plain)) {
+          view = "weddings";
+          tab = /thiep/.test(plain) ? "invite" : "guests";
+          text = wedding
+            ? `Mở ${tab === "invite" ? "thiệp mời" : "danh sách khách mời"} của ${wedding.couple}.`
+            : "Chọn một đám cưới để xem thiệp mời và khách xác nhận.";
+        } else if (/anh|cap nhat|zalo/.test(plain)) {
           view = "inbox";
           text = "Mở cập nhật để thêm nguồn và xem cập nhật cần xác nhận.";
         } else if (/so do|ban tiec|mat bang/.test(plain)) {
@@ -81,7 +93,7 @@ export default function Assistant({
       }
       setMessages((prev) => [
         ...prev,
-        { text: result.message, action: result },
+        { text: result.message, action: result, tab },
       ]);
     } catch (e) {
       setMessages((prev) => [...prev, { text: (e as Error).message }]);
@@ -94,7 +106,7 @@ export default function Assistant({
       {!open && (
         <button className="assistant-launch" onClick={() => setOpen(true)}>
           <Sparkles size={17} />
-          Trợ lý Wedly
+          <span>Trợ lý Wedly</span>
         </button>
       )}
       {open && (
@@ -130,6 +142,7 @@ export default function Assistant({
                   "Mở cập nhật",
                   "Xem thanh toán",
                   "Mở sơ đồ tiệc",
+                  "Khách xác nhận",
                 ].map((prompt) => (
                   <button key={prompt} onClick={() => void send(prompt)}>
                     {prompt}
@@ -148,7 +161,7 @@ export default function Assistant({
                     className="btn small"
                     style={{ marginTop: 12 }}
                     onClick={() => {
-                      go(m.action!.view!, m.action!.weddingId);
+                      go(m.action!.view!, m.action!.weddingId, m.tab);
                       setOpen(false);
                     }}
                   >

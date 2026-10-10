@@ -25,11 +25,13 @@ export default function FloorplanEditor({
   saved,
   onSave,
   busy,
+  confirmedGuests = 0,
 }: {
   wedding: Wedding;
   saved?: Floorplan;
   onSave: (plan: Floorplan) => Promise<void>;
   busy: boolean;
+  confirmedGuests?: number;
 }) {
   const [plan, setPlan] = useState<Floorplan>(
     () => saved ?? { weddingId: wedding.id, width: 20, height: 25, items: [] },
@@ -168,6 +170,19 @@ export default function FloorplanEditor({
                 onChange={(e) => setSeats(Number(e.target.value))}
               />
             </label>
+            {confirmedGuests > 0 && (
+              <button
+                type="button"
+                className="guest-hint"
+                style={{ gridColumn: "1/-1" }}
+                onClick={() =>
+                  setCount(Math.ceil(confirmedGuests / Math.max(1, seats)))
+                }
+              >
+                {confirmedGuests} khách xác nhận → dùng{" "}
+                {Math.ceil(confirmedGuests / Math.max(1, seats))} bàn
+              </button>
+            )}
             <label className="field" style={{ gridColumn: "1/-1" }}>
               Đường kính bàn (m)
               <input

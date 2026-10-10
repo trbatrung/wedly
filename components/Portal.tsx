@@ -1,17 +1,34 @@
 import Link from "next/link";
-import { CalendarDays, MapPin, Users, CheckCheck } from "lucide-react";
+import {
+  CalendarDays,
+  MapPin,
+  Users,
+  CheckCheck,
+  MailOpen,
+  ExternalLink,
+} from "lucide-react";
 import type { Wedding, Task } from "@/lib/types";
 import { dateLabel } from "@/lib/domain";
+
+export type PortalGuests = {
+  attendingPeople: number;
+  responses: number;
+  declined: number;
+};
 export default function Portal({
   wedding,
   tasks,
   teamName,
   demo = false,
+  guests = null,
+  inviteUrl = null,
 }: {
   wedding: Wedding;
   tasks: Task[];
   teamName: string;
   demo?: boolean;
+  guests?: PortalGuests | null;
+  inviteUrl?: string | null;
 }) {
   const done = tasks.filter((t) => t.done).length,
     progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -79,6 +96,41 @@ export default function Portal({
             <strong>{wedding.lead || "Đội ngũ điều phối"}</strong>
           </div>
         </section>
+        {(guests || inviteUrl) && (
+          <section className="panel portal-guests">
+            <div className="between">
+              <h2>Khách mời</h2>
+              <MailOpen size={18} className="muted" />
+            </div>
+            {guests && (
+              <div className="portal-guest-stats">
+                <div>
+                  <strong>{guests.attendingPeople}</strong>
+                  <span>người sẽ tham dự</span>
+                </div>
+                <div>
+                  <strong>{guests.responses}</strong>
+                  <span>phản hồi</span>
+                </div>
+                <div>
+                  <strong>{guests.declined}</strong>
+                  <span>không thể đến</span>
+                </div>
+              </div>
+            )}
+            {inviteUrl && (
+              <a
+                className="btn"
+                href={inviteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={14} />
+                Mở thiệp mời online
+              </a>
+            )}
+          </section>
+        )}
       </div>
       <div className="notice" style={{ marginTop: 25 }}>
         Nếu cần thay đổi thông tin hoặc có câu hỏi, hãy liên hệ trực tiếp với

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -9,11 +10,9 @@ import {
   Wallet,
   Grid2X2,
   Users,
-  ChevronDown,
   ChevronRight,
   Search,
   Plus,
-  Sparkles,
   Check,
   X,
   LoaderCircle,
@@ -27,29 +26,40 @@ import {
   LogOut,
   Link2,
   RefreshCw,
+  Store,
+  MailOpen,
+  UserCheck,
+  RotateCcw,
 } from "lucide-react";
 import {
   viewSchema,
+  weddingTabSchema,
+  weddingTabLabels,
   workspaceSchema,
   weddingSchema,
   taskSchema,
   vendorSchema,
+  rsvpSchema,
   dealLabels,
   categoryLabels,
   type Workspace as WorkspaceData,
   type View,
+  type WeddingTab,
   type Task,
   type Wedding,
   type Vendor,
   type Update,
   type Analysis,
   type Floorplan,
+  type Invitation,
+  type Rsvp,
 } from "@/lib/types";
 import {
   addActivity,
   applyAnalysis,
   analyzeText,
   dateLabel,
+  daysUntil,
   money,
   normalize,
   paidFor,
@@ -59,7 +69,15 @@ import {
   today,
   weddingPaid,
 } from "@/lib/domain";
-import { demoWorkspace } from "@/lib/demo";
+import { rsvpSummary } from "@/lib/invitation";
+import { demoRsvps, demoWorkspace, sampleInvitations } from "@/lib/demo";
+import {
+  DEMO_RSVP_KEY,
+  deleteDemoRsvp,
+  loadDemoRsvps,
+  saveDemoRsvps,
+  upsertDemoRsvp,
+} from "@/lib/rsvp-store";
 import {
   cleanImages,
   retainImage,
@@ -68,10 +86,31 @@ import {
 } from "@/lib/browser-storage";
 import { Logo, Modal, Empty } from "./ui";
 import { Overview, WeddingCard, TaskRows, VendorTable } from "./WorkspaceViews";
-import InboxView from "./InboxView";
-import FloorplanEditor from "./FloorplanEditor";
+import CommandPalette, {
+  QuickAddMenu,
+  type PaletteCommand,
+  type QuickAction,
+} from "./CommandPalette";
+import GuestList from "./invitation/GuestList";
 import Assistant from "./Assistant";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+
+// Heavier editors load only when their tab is opened.
+const loadingPanel = () => (
+  <div className="panel tab-loading">
+    <LoaderCircle size={18} className="spin" />
+  </div>
+);
+const InboxView = dynamic(() => import("./InboxView"), {
+  loading: loadingPanel,
+});
+const FloorplanEditor = dynamic(() => import("./FloorplanEditor"), {
+  loading: loadingPanel,
+});
+const InvitationStudio = dynamic(
+  () => import("./invitation/InvitationStudio"),
+  { loading: loadingPanel },
+);
 
 const STORAGE_KEY = "wedly-workspace-v2";
 const navigation: { id: View; label: string; icon: typeof LayoutDashboard }[] =
@@ -84,6 +123,10 @@ const navigation: { id: View; label: string; icon: typeof LayoutDashboard }[] =
     { id: "floorplan", label: "Sơ đồ tiệc", icon: Grid2X2 },
     { id: "team", label: "Đội ngũ", icon: Users },
   ];
+const countdown = (date: string) => {
+  const days = daysUntil(date);
+  return days < 0 ? "Đã qua" : days === 0 ? "Hôm nay" : `${days} ngày`;
+};
 async function request(url: string, options?: RequestInit) {
   const response = await fetch(url, {
     ...options,
@@ -111,7 +154,11 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
     [mobile, setMobile] = useState(false),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("all"),
-    [tab, setTab] = useState("tasks"),
+    [tab, setTab] = useState<WeddingTab>("tasks"),
+    [rsvps, setRsvps] = useState<Rsvp[]>([]),
+    [rsvpError, setRsvpError] = useState(""),
+    [paletteOpen, setPaletteOpen] = useState(false),
+    [quickOpen, setQuickOpen] = useState(false),
     [modal, setModal] = useState<
       "wedding" | "task" | "vendor" | "payment" | null
     >(null),
@@ -134,8 +181,23 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
   function query() {
     const params = new URLSearchParams(window.location.search);
     const parsed = viewSchema.safeParse(params.get("v"));
+    const parsedTab = weddingTabSchema.safeParse(params.get("t"));
     setView(parsed.success ? parsed.data : "overview");
     setWeddingId(params.get("w"));
+    setTab(parsedTab.success ? parsedTab.data : "tasks");
+  }
+  async function loadRsvps() {
+    if (demo) {
+      setRsvps(loadDemoRsvps() ?? []);
+      return;
+    }
+    try {
+      const result = await request("/api/rsvps");
+      setRsvps(rsvpSchema.array().parse(result.rsvps));
+      setRsvpError("");
+    } catch (e) {
+      setRsvpError((e as Error).message);
+    }
   }
   async function load() {
     setLoadingError("");
@@ -143,12 +205,20 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       let data: WorkspaceData;
       if (demo) {
         const cached = localStorage.getItem(STORAGE_KEY);
-        const parsed = cached
-          ? workspaceSchema.safeParse(JSON.parse(cached))
-          : null;
+        const raw = cached ? JSON.parse(cached) : null;
+        const parsed = raw ? workspaceSchema.safeParse(raw) : null;
         data = parsed?.success ? parsed.data : demoWorkspace();
+        // Demo data saved before invitations existed gets the sample invitation once.
+        if (parsed?.success && !("invitations" in raw))
+          data = { ...data, invitations: sampleInvitations(data) };
         await cleanImages(data.updates);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        let answers = loadDemoRsvps();
+        if (answers === null) {
+          answers = demoRsvps(data);
+          saveDemoRsvps(answers);
+        }
+        setRsvps(answers);
       } else {
         const result = await request("/api/workspace");
         data = workspaceSchema.parse(result.payload);
@@ -184,6 +254,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       }
       stateRef.current = data;
       setState(data);
+      if (!demo) void loadRsvps();
     } catch (e) {
       const message = (e as Error).message;
       if (message === "Bạn chưa tham gia đội ngũ.") setNeedsTeam(true);
@@ -199,6 +270,50 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [demo]);
+  // New guest answers appear when the planner returns to this tab (demo
+  // answers submitted in another tab arrive through the storage event).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (demo && e.key === DEMO_RSVP_KEY) setRsvps(loadDemoRsvps() ?? []);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && stateRef.current)
+        void loadRsvps();
+    };
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [demo]);
+  // Keep the active wedding tab visible in the horizontally scrolling strip.
+  useEffect(() => {
+    const bar = document.querySelector<HTMLElement>(".wedding-tabs");
+    const active = bar?.querySelector<HTMLElement>(".tab.active");
+    if (bar && active)
+      bar.scrollLeft =
+        active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2;
+  }, [tab, weddingId, view, Boolean(state)]);
+  // ⌘K / Ctrl+K or "/" opens quick search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector(".modal-backdrop")) return;
+      const typing = (e.target as HTMLElement | null)?.closest?.(
+        "input, textarea, select, [contenteditable='true']",
+      );
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickOpen(false);
+        setPaletteOpen((open) => !open);
+      } else if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     if (!demo || !state) return;
     const timer = setInterval(() => {
@@ -235,22 +350,39 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       setBusy(false);
     }
   }
-  function go(next: View, id: string | null = null) {
+  function url(next: View, id: string | null, nextTab: WeddingTab) {
+    const params = new URLSearchParams();
+    if (next !== "overview") params.set("v", next);
+    if (id) params.set("w", id);
+    if (next === "weddings" && id && nextTab !== "tasks")
+      params.set("t", nextTab);
+    const query = params.toString();
+    return `${demo ? "/demo" : "/dashboard"}${query ? "?" + query : ""}`;
+  }
+  function go(
+    next: View,
+    id: string | null = null,
+    nextTab: WeddingTab = "tasks",
+  ) {
     setView(next);
     setWeddingId(id);
     setFilter("all");
     setSearch("");
     setMobile(false);
-    setTab("tasks");
-    const params = new URLSearchParams();
-    if (next !== "overview") params.set("v", next);
-    if (id) params.set("w", id);
-    history.pushState(
-      null,
-      "",
-      `${demo ? "/demo" : "/dashboard"}${params.size ? "?" + params.toString() : ""}`,
-    );
+    setQuickOpen(false);
+    setTab(nextTab);
+    history.pushState(null, "", url(next, id, nextTab));
     window.scrollTo({ top: 0 });
+  }
+  // Tabs are part of the address so refresh, back and shared links keep them.
+  function selectTab(next: WeddingTab) {
+    setTab(next);
+    history.replaceState(null, "", url(view, weddingId, next));
+  }
+  // Narrowing a list to one wedding keeps the status filter and search.
+  function scopeTo(id: string | null) {
+    setWeddingId(id);
+    history.replaceState(null, "", url(view, id, tab));
   }
   function openModal(
     type: typeof modal,
@@ -475,6 +607,63 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       notify((e as Error).message, true);
     }
   }
+  async function saveInvitation(next: Invitation, message: string) {
+    const current = stateRef.current!;
+    const invitation: Invitation = {
+      ...next,
+      // Live links get an unguessable token the first time they are published.
+      token:
+        !demo && next.published && !next.token
+          ? crypto.randomUUID()
+          : next.token,
+      updatedAt: new Date().toISOString(),
+    };
+    const exists = current.invitations.some(
+      (i) => i.weddingId === invitation.weddingId,
+    );
+    await commit(
+      addActivity(
+        {
+          ...current,
+          invitations: exists
+            ? current.invitations.map((i) =>
+                i.weddingId === invitation.weddingId ? invitation : i,
+              )
+            : [...current.invitations, invitation],
+        },
+        `Đã cập nhật thiệp mời ${current.weddings.find((w) => w.id === invitation.weddingId)?.couple ?? ""}`,
+      ),
+      message,
+    );
+    return invitation;
+  }
+  function inviteUrl(invitation: Invitation) {
+    if (demo) return `${location.origin}/demo/thiep/${invitation.weddingId}`;
+    return invitation.published && invitation.token
+      ? `${location.origin}/thiep/${invitation.token}`
+      : null;
+  }
+  async function saveRsvp(rsvp: Rsvp) {
+    if (demo) setRsvps(upsertDemoRsvp(rsvp));
+    else {
+      await request("/api/rsvps", {
+        method: "POST",
+        body: JSON.stringify({ rsvp }),
+      });
+      await loadRsvps();
+    }
+    notify(`Đã lưu ${rsvp.name}.`);
+  }
+  async function deleteRsvp(rsvp: Rsvp) {
+    if (demo) setRsvps(deleteDemoRsvp(rsvp.id));
+    else {
+      await request(`/api/rsvps?id=${encodeURIComponent(rsvp.id)}`, {
+        method: "DELETE",
+      });
+      await loadRsvps();
+    }
+    notify(`Đã xóa câu trả lời của ${rsvp.name}.`);
+  }
   async function saveForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
@@ -689,6 +878,142 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       (u) => u.status === "ready" || u.status === "pending",
     ).length,
     label = navigation.find((n) => n.id === view)!.label;
+  const byDate = (a: Wedding, b: Wedding) => a.date.localeCompare(b.date);
+  const upcoming = active.slice().sort(byDate),
+    coupleOf = (id: string) =>
+      state.weddings.find((w) => w.id === id)?.couple ?? "",
+    initials = state.teamName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase(),
+    shortcut = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
+  const weddingRsvps = selected
+      ? rsvps.filter((r) => r.weddingId === selected.id)
+      : [],
+    selectedInvitation = selected
+      ? state.invitations.find((i) => i.weddingId === selected.id)
+      : undefined;
+  const createActions: QuickAction[] = [
+    {
+      id: "wedding",
+      label: "Đám cưới",
+      icon: CalendarDays,
+      run: () => openModal("wedding"),
+    },
+    {
+      id: "task",
+      label: "Công việc",
+      icon: ListTodo,
+      run: () => openModal("task"),
+    },
+    {
+      id: "photo",
+      label: "Ảnh trao đổi",
+      icon: ImagePlus,
+      run: () => go("inbox", weddingId),
+    },
+    {
+      id: "vendor",
+      label: "Nhà cung cấp",
+      icon: Store,
+      run: () => openModal("vendor"),
+    },
+    {
+      id: "payment",
+      label: "Thanh toán đã trả",
+      icon: Wallet,
+      run: () => openModal("payment"),
+    },
+  ];
+  const paletteCommands = (): PaletteCommand[] => [
+    ...createActions.map((a) => ({
+      id: `new-${a.id}`,
+      group: "Tạo mới",
+      label: `Thêm ${a.label.toLowerCase()}`,
+      icon: a.icon,
+      keywords: "tao moi them",
+      run: a.run,
+    })),
+    ...navigation.map((n) => ({
+      id: `page-${n.id}`,
+      group: "Trang",
+      label: n.label,
+      icon: n.icon,
+      keywords: "trang",
+      run: () => go(n.id),
+    })),
+    ...state.weddings
+      .slice()
+      .sort((a, b) => Number(a.archived) - Number(b.archived) || byDate(a, b))
+      .flatMap((w) => [
+        {
+          id: `w-${w.id}`,
+          group: "Đám cưới",
+          label: w.couple,
+          hint: `${dateLabel(w.date)} · ${w.archived ? "Lưu trữ" : countdown(w.date)}`,
+          keywords: w.venue,
+          color: w.color,
+          run: () => go("weddings", w.id),
+        },
+        ...weddingTabSchema.options.map((t) => ({
+          id: `w-${w.id}-${t}`,
+          group: "Đám cưới",
+          label: `${w.couple} › ${weddingTabLabels[t]}`,
+          color: w.color,
+          deep: true,
+          run: () => go("weddings", w.id, t),
+        })),
+      ]),
+    ...state.tasks
+      .filter((t) => !t.done)
+      .map((t) => ({
+        id: `t-${t.id}`,
+        group: "Công việc",
+        label: t.title,
+        hint: `${coupleOf(t.weddingId)} · ${t.dueDate ? dateLabel(t.dueDate).slice(0, 5) : "Chưa có hạn"}`,
+        icon: ListTodo,
+        run: () => go("weddings", t.weddingId, "tasks"),
+      })),
+    ...state.vendors.map((v) => ({
+      id: `v-${v.id}`,
+      group: "Nhà cung cấp",
+      label: v.name,
+      hint: `${v.category} · ${coupleOf(v.weddingId)}`,
+      icon: Store,
+      run: () => go("weddings", v.weddingId, "vendors"),
+    })),
+    ...rsvps.map((r) => ({
+      id: `g-${r.id}`,
+      group: "Khách mời",
+      label: r.name,
+      hint: `${coupleOf(r.weddingId)} · ${r.attending ? `${1 + r.guests} người` : "Không đến"}`,
+      icon: UserCheck,
+      run: () => go("weddings", r.weddingId, "guests"),
+    })),
+  ];
+  const weddingScope = (
+    <label className="scope-select">
+      <span
+        className="dot"
+        style={{ background: selected?.color ?? "#c3cbc1" }}
+      />
+      <select
+        aria-label="Lọc theo đám cưới"
+        value={weddingId ?? ""}
+        onChange={(e) => scopeTo(e.target.value || null)}
+      >
+        <option value="">Tất cả đám cưới</option>
+        {upcoming.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.couple}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   const scopeVendors = state.vendors.filter(
       (v) =>
         (!weddingId || v.weddingId === weddingId) &&
@@ -701,13 +1026,15 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
           (!search || normalize(t.title).includes(normalize(search))) &&
           (filter === "done"
             ? t.done
-            : filter === "overdue"
-              ? !t.done && Boolean(t.dueDate && t.dueDate < today())
-              : filter === "today"
-                ? !t.done && t.dueDate === today()
-                : filter === "pending"
-                  ? !t.done
-                  : true),
+            : filter === "mine"
+              ? !t.done && t.owner === (memberName || state.members[0])
+              : filter === "overdue"
+                ? !t.done && Boolean(t.dueDate && t.dueDate < today())
+                : filter === "today"
+                  ? !t.done && t.dueDate === today()
+                  : filter === "pending"
+                    ? !t.done
+                    : true),
       )
       .sort(
         (a, b) =>
@@ -737,6 +1064,10 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       key={wedding.id}
       wedding={wedding}
       saved={state.floorplans.find((p) => p.weddingId === wedding.id)}
+      confirmedGuests={
+        rsvpSummary(rsvps.filter((r) => r.weddingId === wedding.id))
+          .attendingPeople
+      }
       busy={busy}
       onSave={async (plan: Floorplan) => {
         await commit(
@@ -764,7 +1095,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
           aria-label="Mở đội ngũ"
         >
           <span className="avatar" style={{ borderRadius: 7 }}>
-            NM
+            {initials || "W"}
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <strong>{state.teamName}</strong>
@@ -799,16 +1130,24 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
               <Plus size={13} />
             </button>
           </div>
-          {active.slice(0, 4).map((w) => (
+          {upcoming.slice(0, 6).map((w) => (
             <button
               key={w.id}
               className={`side-wedding ${weddingId === w.id ? "active" : ""}`}
-              onClick={() => go("weddings", w.id)}
+              onClick={() =>
+                go("weddings", w.id, view === "weddings" ? tab : "tasks")
+              }
             >
               <span className="dot" style={{ background: w.color }} />
-              {w.couple}
+              <span className="side-wedding-name">{w.couple}</span>
+              <small>{countdown(w.date)}</small>
             </button>
           ))}
+          {upcoming.length > 6 && (
+            <button className="side-more" onClick={() => go("weddings")}>
+              Xem tất cả {upcoming.length}
+            </button>
+          )}
         </div>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -863,32 +1202,48 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
             >
               <Menu size={18} />
             </button>
-            <div className="breadcrumbs">
-              <strong>{label}</strong>
+            <nav className="breadcrumbs" aria-label="Vị trí hiện tại">
+              <button
+                className="crumb crumb-root"
+                aria-current={selected ? undefined : "page"}
+                onClick={() => go(view)}
+              >
+                {label}
+              </button>
               {selected && (
                 <>
                   <ChevronRight size={12} />
-                  <span>{selected.couple}</span>
+                  <button
+                    className="crumb"
+                    aria-current={
+                      view === "weddings" && tab === "tasks"
+                        ? "page"
+                        : undefined
+                    }
+                    onClick={() => go("weddings", selected.id)}
+                  >
+                    {selected.couple}
+                  </button>
                 </>
               )}
-            </div>
+              {selected && view === "weddings" && tab !== "tasks" && (
+                <>
+                  <ChevronRight size={12} />
+                  <span aria-current="page">{weddingTabLabels[tab]}</span>
+                </>
+              )}
+            </nav>
           </div>
           <div className="top-actions">
-            <label className="global-search">
-              <Search size={14} />
-              <input
-                aria-label="Tìm đám cưới"
-                placeholder="Tìm đám cưới…"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  if (view !== "weddings" || weddingId) {
-                    setView("weddings");
-                    setWeddingId(null);
-                  }
-                }}
-              />
-            </label>
+            <button
+              className="search-trigger"
+              aria-label={`Tìm nhanh (${shortcut})`}
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search size={15} />
+              <span>Tìm nhanh…</span>
+              <kbd>{shortcut}</kbd>
+            </button>
             {demo ? (
               <span
                 className="demo-pill"
@@ -906,20 +1261,33 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                 <RefreshCw size={14} />
               </button>
             )}
-            <button
-              className="btn primary small"
-              onClick={() => openModal("wedding")}
-            >
-              <Plus size={14} />
-              Đám cưới mới
-            </button>
+            <div className="quick-add">
+              <button
+                className="btn primary small quick-add-trigger"
+                aria-haspopup="menu"
+                aria-expanded={quickOpen}
+                onClick={() => setQuickOpen(!quickOpen)}
+              >
+                <Plus size={14} />
+                Tạo mới
+              </button>
+              {quickOpen && (
+                <QuickAddMenu
+                  actions={createActions}
+                  onClose={() => setQuickOpen(false)}
+                />
+              )}
+            </div>
             <span className="avatar">
               {(memberName || state.members[0])?.slice(0, 1)}
             </span>
           </div>
         </header>
         <main className="page-content">
-          <div className="page-head">
+          <div
+            className="page-head"
+            hidden={view === "weddings" && Boolean(selected)}
+          >
             <div>
               {view === "overview" && (
                 <div className="home-date">
@@ -965,6 +1333,14 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                 <Plus size={15} />
                 Nhà cung cấp
               </button>
+            ) : view === "weddings" && !selected ? (
+              <button
+                className="btn primary"
+                onClick={() => openModal("wedding")}
+              >
+                <Plus size={15} />
+                Thêm đám cưới
+              </button>
             ) : null}
           </div>
           {weddingId && !selected ? (
@@ -985,6 +1361,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                   onTask={toggleTask}
                   busy={busy}
                   onNewTask={() => openModal("task")}
+                  rsvps={rsvps}
                 />
               )}
               {view === "weddings" && !selected && (
@@ -1002,10 +1379,16 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                         {name}
                       </button>
                     ))}
-                    <span
-                      className="muted"
-                      style={{ fontSize: 11, marginLeft: "auto" }}
-                    >
+                    <label className="filter-search">
+                      <Search size={14} />
+                      <input
+                        placeholder="Lọc theo tên, địa điểm…"
+                        aria-label="Lọc đám cưới"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                    </label>
+                    <span className="muted filter-count">
                       {
                         state.weddings.filter(
                           (w) => w.archived === (filter === "archived"),
@@ -1023,7 +1406,9 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                         (w) =>
                           w.archived === (filter === "archived") &&
                           (!search ||
-                            normalize(w.couple).includes(normalize(search))),
+                            normalize(`${w.couple} ${w.venue}`).includes(
+                              normalize(search),
+                            )),
                       )
                       .sort((a, b) => a.date.localeCompare(b.date))
                       .map((w) => (
@@ -1073,7 +1458,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                               height: 10,
                             }}
                           />
-                          <h2 style={{ fontSize: 23 }}>{selected.couple}</h2>
+                          <h1 className="detail-title">{selected.couple}</h1>
                           {selected.archived && (
                             <span className="badge neutral">Đã lưu trữ</span>
                           )}
@@ -1119,7 +1504,7 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                       </p>
                     )}
                   </section>
-                  <div className="stats">
+                  <div className="stats detail-stats">
                     <div className="stat">
                       <div className="stat-label">Ngân sách dự kiến</div>
                       <div className="stat-value">
@@ -1149,21 +1534,45 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                       </div>
                     </div>
                   </div>
-                  <div className="tabs">
-                    {[
-                      ["tasks", "Công việc"],
-                      ["vendors", "Nhà cung cấp & chi phí"],
-                      ["floorplan", "Sơ đồ bàn tiệc"],
-                      ["inbox", "Ảnh trao đổi"],
-                    ].map(([key, text]) => (
-                      <button
-                        className={`tab ${tab === key ? "active" : ""}`}
-                        key={key}
-                        onClick={() => setTab(key)}
-                      >
-                        {text}
-                      </button>
-                    ))}
+                  <div className="tabs wedding-tabs" role="tablist">
+                    {weddingTabSchema.options.map((key) => {
+                      const count =
+                        key === "tasks"
+                          ? state.tasks.filter(
+                              (t) => t.weddingId === selected.id && !t.done,
+                            ).length
+                          : key === "guests"
+                            ? rsvpSummary(weddingRsvps).attendingPeople
+                            : key === "inbox"
+                              ? state.updates.filter(
+                                  (u) =>
+                                    u.weddingId === selected.id &&
+                                    (u.status === "ready" ||
+                                      u.status === "pending"),
+                                ).length
+                              : 0;
+                      return (
+                        <button
+                          role="tab"
+                          aria-selected={tab === key}
+                          className={`tab ${tab === key ? "active" : ""}`}
+                          key={key}
+                          onClick={() => selectTab(key)}
+                        >
+                          {weddingTabLabels[key]}
+                          {count > 0 && (
+                            <span className="tab-count">{count}</span>
+                          )}
+                          {key === "invite" &&
+                            selectedInvitation?.published && (
+                              <span
+                                className="tab-live"
+                                title="Thiệp đang mở"
+                              />
+                            )}
+                        </button>
+                      );
+                    })}
                   </div>
                   {tab === "tasks" && (
                     <div className="panel">
@@ -1213,6 +1622,38 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                       />
                     </div>
                   )}
+                  {tab === "guests" && (
+                    <GuestList
+                      key={selected.id}
+                      wedding={selected}
+                      invitation={selectedInvitation}
+                      rsvps={weddingRsvps}
+                      inviteUrl={
+                        selectedInvitation
+                          ? inviteUrl(selectedInvitation)
+                          : null
+                      }
+                      loadError={rsvpError}
+                      onOpenInvite={() => selectTab("invite")}
+                      onOpenFloorplan={() => selectTab("floorplan")}
+                      onSave={saveRsvp}
+                      onDelete={deleteRsvp}
+                      notify={notify}
+                    />
+                  )}
+                  {tab === "invite" && (
+                    <InvitationStudio
+                      key={selected.id}
+                      wedding={selected}
+                      invitation={selectedInvitation}
+                      teamName={state.teamName}
+                      demo={demo}
+                      busy={busy}
+                      inviteUrl={inviteUrl}
+                      onSave={saveInvitation}
+                      notify={notify}
+                    />
+                  )}
                   {tab === "floorplan" && floor(selected)}
                   {tab === "inbox" && <InboxView {...inboxProps} />}
                   <button
@@ -1242,16 +1683,23 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                   </button>
                 </>
               )}
-              {view === "inbox" && <InboxView {...inboxProps} />}
+              {view === "inbox" && (
+                <>
+                  <div className="filters">{weddingScope}</div>
+                  <InboxView key={weddingId ?? "all"} {...inboxProps} />
+                </>
+              )}
               {view === "tasks" && (
                 <>
                   <div className="filters">
+                    {weddingScope}
                     {[
                       ["all", "Tất cả"],
-                      ["pending", "Chưa hoàn thành"],
+                      ["mine", "Của tôi"],
+                      ["pending", "Chưa xong"],
                       ["today", "Hôm nay"],
                       ["overdue", "Quá hạn"],
-                      ["done", "Đã hoàn thành"],
+                      ["done", "Đã xong"],
                     ].map(([id, text]) => (
                       <button
                         className={`filter ${filter === id ? "active" : ""}`}
@@ -1261,6 +1709,15 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                         {text}
                       </button>
                     ))}
+                    <label className="filter-search">
+                      <Search size={14} />
+                      <input
+                        placeholder="Tìm công việc…"
+                        aria-label="Tìm công việc"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                    </label>
                   </div>
                   <div className="panel">
                     <TaskRows
@@ -1269,12 +1726,14 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                       tasks={scopeTasks}
                       onTask={toggleTask}
                       busy={busy}
+                      onWedding={(id) => go("weddings", id)}
                     />
                   </div>
                 </>
               )}
               {view === "payments" && (
                 <>
+                  <div className="filters">{weddingScope}</div>
                   <div className="stats">
                     <div className="stat">
                       <div className="stat-label">Tổng báo giá</div>
@@ -1550,6 +2009,26 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                         <Download size={14} />
                         Tải bản sao dữ liệu
                       </button>
+                      {demo && (
+                        <button
+                          className="btn"
+                          style={{ marginLeft: 8 }}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                "Xóa dữ liệu trải nghiệm trên trình duyệt này và nạp lại dữ liệu mẫu?",
+                              )
+                            )
+                              return;
+                            localStorage.removeItem(STORAGE_KEY);
+                            localStorage.removeItem(DEMO_RSVP_KEY);
+                            window.location.href = "/demo";
+                          }}
+                        >
+                          <RotateCcw size={14} />
+                          Đặt lại dữ liệu mẫu
+                        </button>
+                      )}
                     </section>
                     <section className="panel">
                       <h2>Thời hạn ảnh trao đổi</h2>
@@ -1597,6 +2076,57 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
           );
         }}
       />
+      <nav className="mobile-tabbar" aria-label="Điều hướng nhanh">
+        {(
+          [
+            ["overview", "Hôm nay", LayoutDashboard],
+            ["weddings", "Đám cưới", CalendarDays],
+          ] as const
+        ).map(([id, text, Icon]) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            aria-current={view === id ? "page" : undefined}
+            onClick={() => go(id)}
+          >
+            <Icon size={20} strokeWidth={1.8} />
+            {text}
+          </button>
+        ))}
+        <button
+          className="tabbar-create"
+          aria-label="Tạo mới"
+          aria-haspopup="menu"
+          onClick={() => setQuickOpen(true)}
+        >
+          <Plus size={22} />
+        </button>
+        {(
+          [
+            ["inbox", "Cập nhật", ImagePlus],
+            ["tasks", "Công việc", ListTodo],
+          ] as const
+        ).map(([id, text, Icon]) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            aria-current={view === id ? "page" : undefined}
+            onClick={() => go(id)}
+          >
+            <Icon size={20} strokeWidth={1.8} />
+            {text}
+            {id === "inbox" && pending > 0 && (
+              <span className="tabbar-count">{pending}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+      {paletteOpen && (
+        <CommandPalette
+          commands={paletteCommands()}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
       {modal && (
         <Modal
           title={

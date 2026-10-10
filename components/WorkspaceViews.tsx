@@ -31,7 +31,9 @@ import {
   type Task,
   type Vendor,
   type View,
+  type Rsvp,
 } from "@/lib/types";
+import { rsvpSummary } from "@/lib/invitation";
 import { Empty } from "./ui";
 
 type Props = {
@@ -100,12 +102,14 @@ export function TaskRows({
   onTask,
   busy,
   full = false,
+  onWedding,
 }: {
   tasks: Task[];
   state: Workspace;
   onTask: (task: Task) => void;
   busy: boolean;
   full?: boolean;
+  onWedding?: (weddingId: string) => void;
 }) {
   return (
     <div className={full ? "task-list-full" : ""}>
@@ -143,7 +147,19 @@ export function TaskRows({
                     )?.color,
                   }}
                 />
-                {state.weddings.find((w) => w.id === task.weddingId)?.couple}
+                {onWedding ? (
+                  <button
+                    className="task-wedding"
+                    onClick={() => onWedding(task.weddingId)}
+                  >
+                    {
+                      state.weddings.find((w) => w.id === task.weddingId)
+                        ?.couple
+                    }
+                  </button>
+                ) : (
+                  state.weddings.find((w) => w.id === task.weddingId)?.couple
+                )}
                 <span>·</span>
                 <span>{task.owner || "Chưa phân công"}</span>
               </div>
@@ -173,7 +189,8 @@ export function Overview({
   onTask,
   busy,
   onNewTask,
-}: Props & { onNewTask: () => void }) {
+  rsvps,
+}: Props & { onNewTask: () => void; rsvps: Rsvp[] }) {
   const date = today(),
     active = state.weddings.filter((w) => !w.archived);
   const tasks = state.tasks
@@ -186,6 +203,8 @@ export function Overview({
   const pendingWeddings = active.filter((w) =>
     pending.some((u) => u.weddingId === w.id),
   );
+  const guestsFor = (weddingId: string) =>
+    rsvpSummary(rsvps.filter((r) => r.weddingId === weddingId)).attendingPeople;
   const payments = state.vendors
     .filter(
       (v) =>
@@ -251,6 +270,7 @@ export function Overview({
               state={state}
               onTask={onTask}
               busy={busy}
+              onWedding={(id) => go("weddings", id)}
             />
           </section>
           <section className="panel">
@@ -282,7 +302,11 @@ export function Overview({
                     </span>
                     <span className="wedding-row-name">
                       <strong>{w.couple}</strong>
-                      <small>{w.venue || "Chưa có địa điểm"}</small>
+                      <small>
+                        {guestsFor(w.id) > 0 &&
+                          `${guestsFor(w.id)} khách xác nhận · `}
+                        {w.venue || "Chưa có địa điểm"}
+                      </small>
                     </span>
                     <span
                       className="wedding-row-progress"

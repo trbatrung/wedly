@@ -1,5 +1,6 @@
-import type { Workspace } from "./types";
+import type { Invitation, Rsvp, Workspace } from "./types";
 import { RETENTION_MS, analyzeText, today } from "./domain";
+import { defaultInvitation } from "./invitation";
 
 export function emptyWorkspace(
   name = "Đội ngũ của bạn",
@@ -14,8 +15,107 @@ export function emptyWorkspace(
     payments: [],
     updates: [],
     floorplans: [],
+    invitations: [],
     activity: [],
   };
+}
+// Sample invitation for the demo wedding "Minh & Anh".
+export function sampleInvitations(state: Workspace): Invitation[] {
+  const wedding = state.weddings.find((w) => w.id === "minh-anh");
+  if (!wedding) return [];
+  const base = defaultInvitation(wedding);
+  return [
+    {
+      ...base,
+      published: true,
+      venueName: "GEM Center",
+      venueAddress: "8 Nguyễn Bỉnh Khiêm, TP. Hồ Chí Minh",
+      dressCode: "Lịch sự · Tông pastel nhẹ nhàng",
+      events: [
+        {
+          id: "e1",
+          time: "09:00",
+          title: "Lễ gia tiên",
+          note: "Tư gia nhà gái · Dành cho gia đình",
+        },
+        { id: "e2", time: "17:30", title: "Đón khách", note: "Sảnh tầng 2" },
+        { id: "e3", time: "18:30", title: "Lễ thành hôn", note: "" },
+        { id: "e4", time: "19:00", title: "Khai tiệc", note: "" },
+      ],
+      contact: "Lan · Điều phối tiệc cưới",
+    },
+  ];
+}
+// Fictional sample answers so the demo guest list is not empty.
+export function demoRsvps(state: Workspace): Rsvp[] {
+  if (!state.weddings.some((w) => w.id === "minh-anh")) return [];
+  const at = (hoursAgo: number) =>
+    new Date(Date.now() - hoursAgo * 3600000).toISOString();
+  const rows: [
+    string,
+    boolean,
+    number,
+    string,
+    Rsvp["side"],
+    string,
+    string,
+  ][] = [
+    [
+      "Trần Thu Hà",
+      true,
+      1,
+      "Lê Minh Quân",
+      "bride",
+      "",
+      "Chúc hai bạn trăm năm hạnh phúc!",
+    ],
+    ["Lê Quốc Bảo", true, 0, "", "groom", "Ăn chay", ""],
+    [
+      "Phạm Ngọc Mai",
+      false,
+      0,
+      "",
+      "bride",
+      "",
+      "Mình đi công tác, gửi lời chúc mừng hai bạn!",
+    ],
+    [
+      "Đỗ Minh Khang",
+      true,
+      2,
+      "Vợ và con gái",
+      "groom",
+      "",
+      "Cho mình xin một ghế trẻ em nhé.",
+    ],
+    ["Vũ Hải Yến", true, 0, "", "bride", "Dị ứng hải sản", ""],
+    [
+      "Nguyễn Gia Huy",
+      true,
+      1,
+      "Trịnh Bảo Ngọc",
+      "groom",
+      "",
+      "Hẹn gặp cả nhà!",
+    ],
+  ];
+  return rows.map(
+    ([name, attending, guests, guestNames, side, dietary, message], i) => ({
+      id: `00000000-0000-4000-8000-00000000000${i + 1}`,
+      weddingId: "minh-anh",
+      name,
+      phone: "",
+      attending,
+      guests,
+      guestNames,
+      side,
+      dietary,
+      message,
+      source: "sample" as const,
+      createdAt: at(4 + i * 9),
+      updatedAt: at(4 + i * 9),
+    }),
+  );
 }
 export function demoWorkspace(): Workspace {
   const now = new Date().toISOString();
@@ -71,7 +171,7 @@ export function demoWorkspace(): Workspace {
       note: "Tiệc ngoài trời · Chuẩn bị phương án trời mưa",
     },
   ];
-  return {
+  const state: Workspace = {
     teamName: "Nhà Mình Weddings",
     members: ["Lan", "Hương", "Phúc"],
     weddings: samples.map((w) => ({ ...w, archived: false, shareToken: null })),
@@ -253,6 +353,7 @@ export function demoWorkspace(): Workspace {
       },
     ],
     floorplans: [],
+    invitations: [],
     activity: [
       {
         id: "a1",
@@ -266,4 +367,5 @@ export function demoWorkspace(): Workspace {
       },
     ],
   };
+  return { ...state, invitations: sampleInvitations(state) };
 }
