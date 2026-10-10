@@ -79,6 +79,8 @@ Owner feedback on production: the floorplan needs base layouts with the usual ce
 
 Checks run: typecheck clean, 30/30 tests (new floorplan + design tests), browser QA in the demo: template capacities and generation (35 tables, groups A–F, side headers), photo upload via generated images (cover → arch layout, 4-photo album), font switch + save, album viewer (open/arrow/Esc/focus), photo hero + left align + night palette (fixed an overlay bug), no horizontal overflow at 390px and 1366px. Live photo upload not exercised (no Supabase configured).
 
+Release: commit `580d1fb` pushed to `main`; Vercel production deployment `dpl_DpXNdouUS1yLRkp6hjC4om2RHf2c` Ready on `wedly-sepia.vercel.app`. Production checks: demo, floorplan and demo invitation return 200; template capacities render (20×25 m room: 24 / 36 / does not fit / 56 tables); all five invitation fonts load; `/api/invite-images` returns 503 while Supabase is unconfigured.
+
 ## Open branding discussion
 
 The owner finds “Wedly” too generic/crowded and wants a new brand. No replacement name has been selected. Tentative directions: **Nhịp** (coordination/rhythm; preferred), **Nếp** (order/calm), **Nối** (bringing scattered work together). Preserve the Vietnamese-first product and clean sans-serif visual language. Names are creative candidates; domain/name availability is not established. Do not rename the app, repository or hosting project based on a tentative suggestion alone.
