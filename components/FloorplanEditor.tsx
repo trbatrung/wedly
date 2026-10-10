@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, type CSSProperties } from "react";
+import { useMemo, useState, useRef, type CSSProperties } from "react";
 import {
   Grid2X2,
   Printer,
@@ -12,13 +12,71 @@ import {
   AlertTriangle,
   Download,
   Minus,
+  Check,
 } from "lucide-react";
 import type { Floorplan, FloorItem, Wedding } from "@/lib/types";
 import {
   constrainItem,
-  generateFloorplan,
+  generateLayout,
+  layoutCapacity,
+  layoutTemplates,
   layoutWarnings,
+  sideTotals,
+  type LayoutInput,
+  type LayoutOptions,
 } from "@/lib/floorplan";
+
+const sideNames = {
+  none: null,
+  "groom-left": ["Nhà trai", "Nhà gái"],
+  "bride-left": ["Nhà gái", "Nhà trai"],
+} as const;
+// Templates are drawn by the real generator in a sample room.
+const thumbnails = layoutTemplates.map((t) => {
+  try {
+    return generateLayout({
+      ...t.options,
+      weddingId: "preview",
+      width: 30,
+      height: 24,
+      tables: t.options.groupSize === 6 ? 24 : 20,
+      diameter: 1.8,
+      seats: 10,
+      stageWidth: 7,
+      stageDepth: 2.5,
+    });
+  } catch {
+    return null;
+  }
+});
+function Thumbnail({ plan }: { plan: Floorplan | null }) {
+  if (!plan) return null;
+  return (
+    <svg viewBox={`0 0 ${plan.width} ${plan.height}`} aria-hidden>
+      <rect width={plan.width} height={plan.height} rx="1" fill="#fff" />
+      {plan.items.map((i) =>
+        i.kind === "table" ? (
+          <circle
+            key={i.id}
+            cx={i.x + i.width / 2}
+            cy={i.y + i.height / 2}
+            r={i.width / 2}
+            fill="#c9d9bb"
+          />
+        ) : i.kind === "entrance" ? null : (
+          <rect
+            key={i.id}
+            x={i.x}
+            y={i.y}
+            width={i.width}
+            height={i.height}
+            fill={i.kind === "aisle" ? "#f1e4cf" : "#d9cfbd"}
+          />
+        ),
+      )}
+    </svg>
+  );
+}
 
 export default function FloorplanEditor({
   wedding,
@@ -26,15 +84,24 @@ export default function FloorplanEditor({
   onSave,
   busy,
   confirmedGuests = 0,
+  confirmedBySide = { groom: 0, bride: 0 },
 }: {
   wedding: Wedding;
   saved?: Floorplan;
   onSave: (plan: Floorplan) => Promise<void>;
   busy: boolean;
   confirmedGuests?: number;
+  confirmedBySide?: { groom: number; bride: number };
 }) {
   const [plan, setPlan] = useState<Floorplan>(
-    () => saved ?? { weddingId: wedding.id, width: 20, height: 25, items: [] },
+    () =>
+      saved ?? {
+        weddingId: wedding.id,
+        width: 20,
+        height: 25,
+        items: [],
+        sides: "none",
+      },
   );
   const [width, setWidth] = useState(saved?.width ?? 20),
     [height, setHeight] = useState(saved?.height ?? 25);
@@ -46,10 +113,21 @@ export default function FloorplanEditor({
     [stageWidth, setStageWidth] = useState(6),
     [stageDepth, setStageDepth] = useState(3),
     [seats, setSeats] = useState(10);
+  const [options, setOptions] = useState<LayoutOptions>(() => {
+    const savedAisle = saved?.items.find((i) => i.kind === "aisle");
+    return savedAisle
+      ? { ...layoutTemplates[0].options, aisle: savedAisle.width }
+      : layoutTemplates[0].options;
+  });
+  const [template, setTemplate] = useState<string | null>(
+    saved ? null : layoutTemplates[0].id,
+  );
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null),
     [error, setError] = useState(""),
-    [dirty, setDirty] = useState(false);
+    [dirty, setDirty] = useState(false),
+    // Saved plans and dragged tables are manual work worth confirming over.
+    [manual, setManual] = useState(Boolean(saved));
   const svgRef = useRef<SVGSVGElement>(null),
     drag = useRef<{ id: string; offsetX: number; offsetY: number } | null>(
       null,
@@ -60,6 +138,39 @@ export default function FloorplanEditor({
     (s, item) => s + (item.kind === "table" ? item.seats : 0),
     0,
   );
+  const input = (layout: LayoutOptions): LayoutInput => ({
+    ...layout,
+    weddingId: wedding.id,
+    width,
+    height,
+    tables: count,
+    diameter,
+    seats,
+    stageWidth,
+    stageDepth,
+  });
+  const capacity = layoutCapacity(input(options));
+  const pendingSize =
+    plan.items.length > 0 && (plan.width !== width || plan.height !== height);
+  const sides = sideTotals(plan),
+    names = sideNames[plan.sides];
+  const groupBoxes = useMemo(() => {
+    const boxes = new Map<
+      string,
+      { x0: number; y0: number; x1: number; y1: number }
+    >();
+    for (const t of plan.items)
+      if (t.kind === "table" && t.group) {
+        const box = boxes.get(t.group);
+        boxes.set(t.group, {
+          x0: Math.min(box?.x0 ?? t.x, t.x),
+          y0: Math.min(box?.y0 ?? t.y, t.y),
+          x1: Math.max(box?.x1 ?? t.x + t.width, t.x + t.width),
+          y1: Math.max(box?.y1 ?? t.y + t.height, t.y + t.height),
+        });
+      }
+    return Array.from(boxes);
+  }, [plan.items]);
   function updateItem(id: string, change: Partial<FloorItem>) {
     setPlan((prev) => ({
       ...prev,
@@ -70,27 +181,36 @@ export default function FloorplanEditor({
       ),
     }));
     setDirty(true);
+    setManual(true);
   }
-  function generate() {
+  function generate(layout = options) {
     try {
-      setPlan(
-        generateFloorplan(
-          wedding.id,
-          width,
-          height,
-          count,
-          diameter,
-          stageWidth,
-          stageDepth,
-          seats,
-        ),
-      );
+      setPlan(generateLayout(input(layout)));
       setSelected(null);
       setDirty(true);
+      setManual(false);
       setError("");
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+  function setOption(change: Partial<LayoutOptions>) {
+    setOptions((o) => ({ ...o, ...change }));
+    setTemplate(null);
+  }
+  function chooseTemplate(id: string) {
+    const chosen = layoutTemplates.find((t) => t.id === id)!;
+    if (
+      manual &&
+      plan.items.length &&
+      !window.confirm(
+        "Áp dụng bố cục mẫu sẽ thay vị trí bàn hiện tại. Tiếp tục?",
+      )
+    )
+      return;
+    setOptions(chosen.options);
+    setTemplate(id);
+    generate(chosen.options);
   }
   function point(clientX: number, clientY: number) {
     const svg = svgRef.current!;
@@ -116,60 +236,71 @@ export default function FloorplanEditor({
     a.click();
     URL.revokeObjectURL(url);
   }
+  const number = (
+    label: string,
+    value: number,
+    set: (n: number) => void,
+    attrs: { min: number; max: number; step?: number },
+  ) => (
+    <label className="field">
+      {label}
+      <input
+        type="number"
+        min={attrs.min}
+        max={attrs.max}
+        step={attrs.step ?? 1}
+        value={value}
+        onChange={(e) => set(Number(e.target.value))}
+      />
+    </label>
+  );
   return (
     <div className="floor-layout">
       <div className="panel floor-tools">
         <div>
           <div className="section-head">
-            <h2>Kích thước & bố trí</h2>
+            <h2>Bố cục mẫu</h2>
             <Grid2X2 size={17} className="muted" />
           </div>
-          <div className="fields">
-            <label className="field">
-              Rộng phòng (m)
-              <input
-                type="number"
-                min="3"
-                max="100"
-                step="0.5"
-                value={width}
-                onChange={(e) => setWidth(Number(e.target.value))}
-              />
-            </label>
-            <label className="field">
-              Dài phòng (m)
-              <input
-                type="number"
-                min="3"
-                max="100"
-                step="0.5"
-                value={height}
-                onChange={(e) => setHeight(Number(e.target.value))}
-              />
-            </label>
+          <div className="layout-templates">
+            {layoutTemplates.map((t, i) => {
+              const fits = layoutCapacity(input(t.options));
+              return (
+                <button
+                  key={t.id}
+                  className={`layout-template ${template === t.id ? "active" : ""}`}
+                  aria-pressed={template === t.id}
+                  onClick={() => chooseTemplate(t.id)}
+                >
+                  <Thumbnail plan={thumbnails[i]} />
+                  <strong>{t.name}</strong>
+                  <small className={fits >= count ? "" : "short"}>
+                    {fits ? `Tối đa ${fits} bàn` : "Không vừa phòng"}
+                  </small>
+                </button>
+              );
+            })}
           </div>
+          <p className="field-hint">
+            Chọn mẫu để tạo ngay; sau đó kéo từng bàn để chỉnh.
+          </p>
+        </div>
+        <div>
           <div className="divider" />
+          <p className="floor-group-title">Phòng & bàn</p>
           <div className="fields">
-            <label className="field">
-              Số bàn
-              <input
-                type="number"
-                min="0"
-                max="200"
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-              />
-            </label>
-            <label className="field">
-              Khách mỗi bàn
-              <input
-                type="number"
-                min="1"
-                max="30"
-                value={seats}
-                onChange={(e) => setSeats(Number(e.target.value))}
-              />
-            </label>
+            {number("Rộng phòng (m)", width, setWidth, {
+              min: 3,
+              max: 100,
+              step: 0.5,
+            })}
+            {number("Dài phòng (m)", height, setHeight, {
+              min: 3,
+              max: 100,
+              step: 0.5,
+            })}
+            {number("Số bàn", count, setCount, { min: 0, max: 200 })}
+            {number("Khách mỗi bàn", seats, setSeats, { min: 1, max: 30 })}
             {confirmedGuests > 0 && (
               <button
                 type="button"
@@ -183,60 +314,149 @@ export default function FloorplanEditor({
                 {Math.ceil(confirmedGuests / Math.max(1, seats))} bàn
               </button>
             )}
-            <label className="field" style={{ gridColumn: "1/-1" }}>
-              Đường kính bàn (m)
-              <input
-                type="number"
-                min="0.5"
-                max="5"
-                step="0.1"
-                value={diameter}
-                onChange={(e) => setDiameter(Number(e.target.value))}
-              />
-            </label>
+            <div style={{ gridColumn: "1/-1" }}>
+              {number("Đường kính bàn (m)", diameter, setDiameter, {
+                min: 0.5,
+                max: 5,
+                step: 0.1,
+              })}
+            </div>
           </div>
         </div>
         <div>
           <div className="divider" />
-          <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
-            Sân khấu
-          </p>
+          <p className="floor-group-title">Lối đi & nhóm bàn</p>
           <div className="fields">
+            {number(
+              "Lối đi giữa (m)",
+              options.aisle,
+              (aisle) => setOption({ aisle: Math.max(0, aisle) }),
+              { min: 0, max: 10, step: 0.5 },
+            )}
             <label className="field">
-              Rộng (m)
-              <input
-                type="number"
-                min="1"
-                max="100"
-                step="0.5"
-                value={stageWidth}
-                onChange={(e) => setStageWidth(Number(e.target.value))}
-              />
+              Hai bên lối đi
+              <select
+                value={options.sides}
+                disabled={!options.aisle}
+                onChange={(e) => {
+                  const value = e.target.value as Floorplan["sides"];
+                  setOption({ sides: value });
+                  if (plan.items.some((i) => i.kind === "aisle")) {
+                    setPlan((p) => ({ ...p, sides: value }));
+                    setDirty(true);
+                  }
+                }}
+              >
+                <option value="groom-left">Trai trái · Gái phải</option>
+                <option value="bride-left">Gái trái · Trai phải</option>
+                <option value="none">Không ghi</option>
+              </select>
             </label>
-            <label className="field">
-              Sâu (m)
-              <input
-                type="number"
-                min="1"
-                max="100"
-                step="0.5"
-                value={stageDepth}
-                onChange={(e) => setStageDepth(Number(e.target.value))}
-              />
-            </label>
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              Bàn mỗi nhóm
+              <div className="segmented floor-segmented">
+                {[4, 5, 6, 0].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    aria-pressed={options.groupSize === size}
+                    className={options.groupSize === size ? "active" : ""}
+                    onClick={() => setOption({ groupSize: size })}
+                  >
+                    {size || "Không chia"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {options.groupSize > 2 && (
+              <div className="field" style={{ gridColumn: "1/-1" }}>
+                Xếp trong nhóm
+                <div className="segmented floor-segmented">
+                  {(
+                    [
+                      ["block", "Khối 2 hàng"],
+                      ["row", "Một hàng"],
+                    ] as const
+                  ).map(([style, label]) => (
+                    <button
+                      key={style}
+                      type="button"
+                      aria-pressed={options.groupStyle === style}
+                      className={options.groupStyle === style ? "active" : ""}
+                      onClick={() => setOption({ groupStyle: style })}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <details className="input-details floor-spacing">
+            <summary>Khoảng cách</summary>
+            <div className="fields">
+              {number(
+                "Giữa các bàn (m)",
+                options.gap,
+                (gap) => setOption({ gap }),
+                { min: 0.3, max: 5, step: 0.1 },
+              )}
+              {number(
+                "Giữa các nhóm (m)",
+                options.walkway,
+                (walkway) => setOption({ walkway }),
+                { min: 0, max: 10, step: 0.1 },
+              )}
+              {number(
+                "Trước sân khấu (m)",
+                options.front,
+                (front) => setOption({ front }),
+                { min: 0, max: 20, step: 0.5 },
+              )}
+            </div>
+          </details>
+        </div>
+        <div>
+          <div className="divider" />
+          <p className="floor-group-title">Sân khấu</p>
+          <div className="fields">
+            {number("Rộng (m)", stageWidth, setStageWidth, {
+              min: 1,
+              max: 100,
+              step: 0.5,
+            })}
+            {number("Sâu (m)", stageDepth, setStageDepth, {
+              min: 1,
+              max: 100,
+              step: 0.5,
+            })}
           </div>
           <button
             className="btn primary"
             style={{ width: "100%", marginTop: 18 }}
-            onClick={generate}
+            onClick={() => generate()}
           >
             <Grid2X2 size={15} />
             {plan.items.length ? "Tạo lại bố trí" : "Tạo sơ đồ"}
           </button>
-          <p className="muted" style={{ fontSize: 10, marginTop: 9 }}>
-            Bố trí tự động có khoảng cách 0,8 m giữa các bàn. Tạo lại sẽ thay
-            thế vị trí đang có.
+          <p
+            className={`floor-capacity ${capacity >= count ? "" : "short"}`}
+            role="status"
+          >
+            {capacity >= count ? (
+              <Check size={12} />
+            ) : (
+              <AlertTriangle size={12} />
+            )}
+            {capacity
+              ? `Cài đặt này chứa tối đa ${capacity} bàn`
+              : "Cài đặt này không vừa phòng"}
           </p>
+          {pendingSize && (
+            <p className="field-hint">
+              Kích thước mới sẽ áp dụng khi tạo lại bố trí.
+            </p>
+          )}
           {error && (
             <div
               className="notice error"
@@ -249,7 +469,10 @@ export default function FloorplanEditor({
         </div>
         {selectedItem && (
           <div className="floor-selected">
-            <strong>{selectedItem.label}</strong>
+            <strong>
+              {selectedItem.label}
+              {selectedItem.group && ` · Nhóm ${selectedItem.group}`}
+            </strong>
             <div className="fields">
               <label className="field">
                 Vị trí X (m)
@@ -322,7 +545,7 @@ export default function FloorplanEditor({
               </label>
               {selectedItem.kind !== "table" && (
                 <label className="field">
-                  Sâu (m)
+                  {selectedItem.kind === "aisle" ? "Dài (m)" : "Sâu (m)"}
                   <input
                     type="number"
                     min="0.5"
@@ -347,6 +570,7 @@ export default function FloorplanEditor({
                 });
                 setSelected(null);
                 setDirty(true);
+                setManual(true);
               }}
             >
               <Trash2 size={13} />
@@ -505,7 +729,77 @@ export default function FloorplanEditor({
             >
               {plan.height} m
             </text>
-            {plan.items.map((item) => (
+            {groupBoxes.map(([letter, b]) => (
+              <g key={letter} className="floor-group" aria-hidden>
+                <rect
+                  x={b.x0 - 0.3}
+                  y={b.y0 - 0.3}
+                  width={b.x1 - b.x0 + 0.6}
+                  height={b.y1 - b.y0 + 0.6}
+                  rx=".45"
+                  fill="#f5f8f1"
+                  stroke="#cddbc2"
+                  strokeWidth=".04"
+                  strokeDasharray=".22 .16"
+                />
+                <text
+                  x={b.x0 - 0.2}
+                  y={b.y0 - 0.45}
+                  fontSize=".3"
+                  fontFamily="Arial"
+                  fill="#7d8f74"
+                >
+                  Nhóm {letter}
+                </text>
+              </g>
+            ))}
+            {sides && names && (
+              <g aria-hidden>
+                {(
+                  [
+                    [sides.middle / 2, names[0], sides.left, "left"],
+                    [
+                      (sides.middle + plan.width) / 2,
+                      names[1],
+                      sides.right,
+                      "right",
+                    ],
+                  ] as const
+                ).map(([x, name, total, key]) => {
+                  const guests =
+                    name === "Nhà trai"
+                      ? confirmedBySide.groom
+                      : confirmedBySide.bride;
+                  const stage = plan.items.find((i) => i.kind === "stage");
+                  const y = (stage ? stage.y + stage.height : 0) + 0.7;
+                  return (
+                    <text
+                      key={key}
+                      x={x}
+                      y={y}
+                      textAnchor="middle"
+                      fontFamily="Arial"
+                      fontSize=".36"
+                      fill="#4f6247"
+                      fontWeight="700"
+                    >
+                      {name.toUpperCase()} · {total.tables} bàn · {total.seats}{" "}
+                      chỗ
+                      {guests > 0 && (
+                        <tspan fontWeight="400" fill="#7d8f74">
+                          {" "}
+                          · {guests} khách xác nhận
+                        </tspan>
+                      )}
+                    </text>
+                  );
+                })}
+              </g>
+            )}
+            {[
+              ...plan.items.filter((i) => i.kind === "aisle"),
+              ...plan.items.filter((i) => i.kind !== "aisle"),
+            ].map((item) => (
               <g
                 key={item.id}
                 className={`floor-object ${selected === item.id ? "selected" : ""}`}
@@ -584,6 +878,41 @@ export default function FloorplanEditor({
                       {item.seats} chỗ
                     </text>
                   </>
+                ) : item.kind === "aisle" ? (
+                  <>
+                    <rect
+                      x={item.x}
+                      y={item.y}
+                      width={item.width}
+                      height={item.height}
+                      fill={selected === item.id ? "#efe2cb" : "#f8f1e6"}
+                    />
+                    {[item.x, item.x + item.width].map((x) => (
+                      <line
+                        key={x}
+                        x1={x}
+                        x2={x}
+                        y1={item.y}
+                        y2={item.y + item.height}
+                        stroke={selected === item.id ? "#a8875a" : "#d8c3a2"}
+                        strokeWidth=".05"
+                        strokeDasharray=".3 .2"
+                      />
+                    ))}
+                    <text
+                      x={item.x + item.width / 2}
+                      y={item.y + item.height / 2}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize=".34"
+                      letterSpacing=".08"
+                      fill="#a8946f"
+                      fontFamily="Arial"
+                      transform={`rotate(-90 ${item.x + item.width / 2} ${item.y + item.height / 2})`}
+                    >
+                      {item.label.toUpperCase()} · {item.width} m
+                    </text>
+                  </>
                 ) : (
                   <>
                     <rect
@@ -607,16 +936,18 @@ export default function FloorplanEditor({
                     >
                       {item.label}
                     </text>
-                    <text
-                      x={item.x + item.width / 2}
-                      y={item.y + item.height / 2 + 0.5}
-                      textAnchor="middle"
-                      fontSize=".25"
-                      fill="#8b816b"
-                      fontFamily="Arial"
-                    >
-                      {item.width} × {item.height} m
-                    </text>
+                    {item.kind === "stage" && (
+                      <text
+                        x={item.x + item.width / 2}
+                        y={item.y + item.height / 2 + 0.5}
+                        textAnchor="middle"
+                        fontSize=".25"
+                        fill="#8b816b"
+                        fontFamily="Arial"
+                      >
+                        {item.width} × {item.height} m
+                      </text>
+                    )}
                   </>
                 )}
               </g>
@@ -630,7 +961,7 @@ export default function FloorplanEditor({
                 fontSize=".5"
                 fill="#8b9781"
               >
-                Nhập kích thước và chọn “Tạo sơ đồ”
+                Chọn một bố cục mẫu để bắt đầu
               </text>
             )}
           </svg>
@@ -643,6 +974,14 @@ export default function FloorplanEditor({
           <span className="row">
             <Square size={12} />
             Sân khấu
+          </span>
+          <span className="row">
+            <span className="legend-aisle" />
+            Lối đi chính
+          </span>
+          <span className="row">
+            <span className="legend-group" />
+            Nhóm bàn
           </span>
           <span className="row">
             <Move size={12} />
@@ -658,7 +997,7 @@ export default function FloorplanEditor({
           <button
             className="btn small"
             onClick={() => {
-              const item = constrainItem(
+              const item = constrainItem<FloorItem>(
                 {
                   id: crypto.randomUUID(),
                   kind: "entrance",
@@ -668,6 +1007,7 @@ export default function FloorplanEditor({
                   width: 2,
                   height: 1,
                   seats: 0,
+                  group: "",
                 },
                 plan.width,
                 plan.height,

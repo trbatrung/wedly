@@ -84,6 +84,12 @@ import {
   saveImage,
   prepareImage,
 } from "@/lib/browser-storage";
+import {
+  compressPhoto,
+  pruneLocalPhotos,
+  removeLocalPhoto,
+  storeLocalPhoto,
+} from "@/lib/invite-photos";
 import { Logo, Modal, Empty } from "./ui";
 import { Overview, WeddingCard, TaskRows, VendorTable } from "./WorkspaceViews";
 import CommandPalette, {
@@ -123,6 +129,8 @@ const navigation: { id: View; label: string; icon: typeof LayoutDashboard }[] =
     { id: "floorplan", label: "Sơ đồ tiệc", icon: Grid2X2 },
     { id: "team", label: "Đội ngũ", icon: Users },
   ];
+const photoRefs = (invitations: Invitation[]) =>
+  invitations.flatMap((i) => [i.coverUrl, ...i.gallery].filter(Boolean));
 const countdown = (date: string) => {
   const days = daysUntil(date);
   return days < 0 ? "Đã qua" : days === 0 ? "Hôm nay" : `${days} ngày`;
@@ -212,6 +220,8 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
         if (parsed?.success && !("invitations" in raw))
           data = { ...data, invitations: sampleInvitations(data) };
         await cleanImages(data.updates);
+        // Drop demo photos that no saved invitation uses (uploaded, never saved).
+        void pruneLocalPhotos(photoRefs(data.invitations)).catch(() => {});
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         let answers = loadDemoRsvps();
         if (answers === null) {
@@ -609,6 +619,9 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
   }
   async function saveInvitation(next: Invitation, message: string) {
     const current = stateRef.current!;
+    const before = current.invitations.find(
+      (i) => i.weddingId === next.weddingId,
+    );
     const invitation: Invitation = {
       ...next,
       // Live links get an unguessable token the first time they are published.
@@ -635,7 +648,35 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
       ),
       message,
     );
+    // Photos removed from the saved invitation are deleted only after saving.
+    const kept = new Set(photoRefs([invitation]));
+    for (const ref of photoRefs(before ? [before] : []))
+      if (!kept.has(ref)) void removePhoto(ref);
     return invitation;
+  }
+  async function uploadInvitePhoto(file: File, weddingId: string) {
+    const blob = await compressPhoto(file);
+    if (demo) return storeLocalPhoto(blob);
+    const form = new FormData();
+    form.set("file", new File([blob], "anh.jpg", { type: "image/jpeg" }));
+    form.set("weddingId", weddingId);
+    const { url } = await request("/api/invite-images", {
+      method: "POST",
+      body: form,
+    });
+    return url as string;
+  }
+  async function removePhoto(ref: string) {
+    try {
+      if (ref.startsWith("local:")) await removeLocalPhoto(ref);
+      else if (!demo)
+        await request("/api/invite-images", {
+          method: "DELETE",
+          body: JSON.stringify({ url: ref }),
+        });
+    } catch {
+      /* A pasted external link or an already removed file needs no cleanup. */
+    }
   }
   function inviteUrl(invitation: Invitation) {
     if (demo) return `${location.origin}/demo/thiep/${invitation.weddingId}`;
@@ -1059,32 +1100,33 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
     onRetain: retain,
     onDismiss: dismiss,
   };
-  const floor = (wedding: Wedding) => (
-    <FloorplanEditor
-      key={wedding.id}
-      wedding={wedding}
-      saved={state.floorplans.find((p) => p.weddingId === wedding.id)}
-      confirmedGuests={
-        rsvpSummary(rsvps.filter((r) => r.weddingId === wedding.id))
-          .attendingPeople
-      }
-      busy={busy}
-      onSave={async (plan: Floorplan) => {
-        await commit(
-          {
-            ...stateRef.current!,
-            floorplans: [
-              ...stateRef.current!.floorplans.filter(
-                (p) => p.weddingId !== plan.weddingId,
-              ),
-              plan,
-            ],
-          },
-          "Đã lưu sơ đồ bàn tiệc.",
-        );
-      }}
-    />
-  );
+  const floor = (wedding: Wedding) => {
+    const guests = rsvpSummary(rsvps.filter((r) => r.weddingId === wedding.id));
+    return (
+      <FloorplanEditor
+        key={wedding.id}
+        wedding={wedding}
+        saved={state.floorplans.find((p) => p.weddingId === wedding.id)}
+        confirmedGuests={guests.attendingPeople}
+        confirmedBySide={{ groom: guests.groom, bride: guests.bride }}
+        busy={busy}
+        onSave={async (plan: Floorplan) => {
+          await commit(
+            {
+              ...stateRef.current!,
+              floorplans: [
+                ...stateRef.current!.floorplans.filter(
+                  (p) => p.weddingId !== plan.weddingId,
+                ),
+                plan,
+              ],
+            },
+            "Đã lưu sơ đồ bàn tiệc.",
+          );
+        }}
+      />
+    );
+  };
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
@@ -1651,6 +1693,9 @@ export default function Workspace({ demo = false }: { demo?: boolean }) {
                       busy={busy}
                       inviteUrl={inviteUrl}
                       onSave={saveInvitation}
+                      onUploadPhoto={(file) =>
+                        uploadInvitePhoto(file, selected.id)
+                      }
                       notify={notify}
                     />
                   )}

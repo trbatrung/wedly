@@ -5,6 +5,8 @@ import {
   calendarEvent,
   csvCell,
   defaultInvitation,
+  inviteStyle,
+  mixColor,
   normalizeRsvp,
   publicInvitation,
   rsvpCsv,
@@ -192,4 +194,55 @@ test("RSVP closes after the wedding day and calendar uses Vietnam time", () => {
   assert.deepEqual(splitNames("Minh & Anh"), ["Minh", "Anh"]);
   assert.deepEqual(splitNames("Trang và James"), ["Trang", "James"]);
   assert.deepEqual(splitNames("Gia đình"), ["Gia đình", null]);
+});
+
+test("invitation design choices load with defaults and validate photos", () => {
+  const state = demoWorkspace();
+  const wedding = state.weddings[0];
+  // An invitation saved before the designer existed keeps the original look.
+  const legacy: Record<string, unknown> = { ...state.invitations[0] };
+  for (const key of ["layout", "font", "align", "accent", "gallery", "hidden"])
+    delete legacy[key];
+  const parsed = invitationSchema.parse(legacy);
+  assert.deepEqual(
+    [parsed.layout, parsed.font, parsed.align, parsed.accent],
+    ["text", "modern", "center", ""],
+  );
+  assert.deepEqual([parsed.gallery, parsed.hidden], [[], []]);
+  const ok = (gallery: string[]) =>
+    invitationSchema.safeParse({ ...parsed, gallery }).success;
+  assert.ok(ok(["local:11111111-1111-4111-8111-111111111111"]));
+  assert.ok(ok(["https://example.supabase.co/storage/v1/object/public/a.jpg"]));
+  assert.equal(ok(["javascript:alert(1)"]), false);
+  assert.equal(ok(["data:image/png;base64,AAAA"]), false);
+  assert.equal(
+    ok(Array(13).fill("local:11111111-1111-4111-8111-111111111111")),
+    false,
+  );
+  // A photo layout without a cover photo falls back to the text layout.
+  const noCover = publicInvitation(wedding, { ...parsed, layout: "arch" }, "");
+  assert.equal(noCover.layout, "text");
+  const withCover = publicInvitation(
+    wedding,
+    {
+      ...parsed,
+      layout: "arch",
+      coverUrl: "local:11111111-1111-4111-8111-111111111111",
+    },
+    "",
+  );
+  assert.equal(withCover.layout, "arch");
+});
+
+test("a custom accent retints rings and the soft background", () => {
+  const base = inviteStyle("sage", "");
+  assert.equal(base["--inv-accent"], "#6f8b72");
+  assert.equal(base["--inv-ring"], "rgba(111, 139, 114, 0.38)");
+  const custom = inviteStyle("sage", "#ff0000");
+  assert.equal(custom["--inv-accent"], "#ff0000");
+  assert.equal(custom["--inv-ring-2"], "rgba(255, 0, 0, 0.18)");
+  assert.equal(custom["--inv-soft"], mixColor("#ff0000", "#faf8f3", 0.14));
+  assert.match(custom["--inv-soft"], /^#[0-9a-f]{6}$/);
+  // Invalid accents are ignored rather than breaking the page.
+  assert.equal(inviteStyle("night", "red")["--inv-accent"], "#d4b06a");
 });

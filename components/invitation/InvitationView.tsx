@@ -1,8 +1,16 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import {
   CalendarPlus,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Gift,
   LoaderCircle,
   MapPin,
@@ -11,17 +19,24 @@ import {
   Phone,
   Plus,
   Shirt,
+  X,
 } from "lucide-react";
-import { inviteFont } from "@/lib/fonts";
+import { inviteFontVariables } from "@/lib/fonts";
 import { daysUntil, dateLabel } from "@/lib/domain";
 import {
   calendarEvent,
+  inviteStyle,
   rsvpStatus,
   splitNames,
   type PublicInvitation,
 } from "@/lib/invitation";
-import { rsvpInputSchema, type RsvpInput } from "@/lib/types";
+import {
+  rsvpInputSchema,
+  type InviteSection,
+  type RsvpInput,
+} from "@/lib/types";
 import { recallAnswer, rememberAnswer } from "@/lib/rsvp-store";
+import { usePhoto } from "@/lib/invite-photos";
 
 type Mode = "live" | "demo" | "preview";
 const WEEKDAYS = [
@@ -57,14 +72,27 @@ export default function InvitationView({
   const preview = mode === "preview";
   const [first, second] = splitNames(invite.names);
   const status = rsvpStatus(invite);
+  const [viewer, setViewer] = useState<number | null>(null);
+  const cover = usePhoto(invite.coverUrl);
+  const shown = (section: InviteSection) => !invite.hidden.includes(section);
+  const has = {
+    message: shown("message") && Boolean(invite.message),
+    schedule: shown("schedule") && invite.events.length > 0,
+    venue: shown("venue") && Boolean(invite.venueName || invite.venueAddress),
+    gallery: shown("gallery") && invite.gallery.length > 0,
+    rsvp: status !== "off",
+    faq: shown("faq") && invite.faqs.length > 0,
+    thanks: shown("thanks") && Boolean(invite.giftNote),
+  };
   const sections = (
     [
-      ["schedule", "Lịch trình", invite.events.length > 0],
-      ["venue", "Địa điểm", Boolean(invite.venueName || invite.venueAddress)],
-      ["rsvp", "Xác nhận", status !== "off"],
-      ["faq", "Hỏi đáp", invite.faqs.length > 0],
+      ["schedule", "Lịch trình"],
+      ["venue", "Địa điểm"],
+      ["gallery", "Album"],
+      ["rsvp", "Xác nhận"],
+      ["faq", "Hỏi đáp"],
     ] as const
-  ).filter(([, , show]) => show);
+  ).filter(([id]) => has[id]);
   const jump = (id: string) =>
     root.current
       ?.querySelector(`[data-section="${id}"]`)
@@ -98,10 +126,12 @@ export default function InvitationView({
     a.click();
     URL.revokeObjectURL(url);
   }
+  const count = invite.gallery.length;
   return (
     <div
       ref={root}
-      className={`inv inv-theme-${invite.theme} ${inviteFont.className} ${preview ? "inv-preview" : ""}`}
+      className={`inv inv-font-${invite.font} inv-align-${invite.align} ${inviteFontVariables} ${preview ? "inv-preview" : ""}`}
+      style={inviteStyle(invite.theme, invite.accent) as CSSProperties}
     >
       {mode === "demo" && (
         <div className="inv-demo-bar">
@@ -109,15 +139,27 @@ export default function InvitationView({
         </div>
       )}
       <article className="inv-card">
-        <header className={`inv-hero ${invite.coverUrl ? "has-cover" : ""}`}>
-          {invite.coverUrl && (
+        <header className={`inv-hero inv-hero-${invite.layout}`}>
+          {invite.layout === "photo" && cover && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               className="inv-cover"
-              src={invite.coverUrl}
+              src={cover}
               alt=""
               referrerPolicy="no-referrer"
             />
+          )}
+          {invite.layout === "arch" && (
+            <div className="inv-arch">
+              {cover && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={cover}
+                  alt={`Ảnh cưới ${invite.names}`}
+                  referrerPolicy="no-referrer"
+                />
+              )}
+            </div>
           )}
           <div className="inv-hero-content">
             {invite.headline && (
@@ -149,7 +191,7 @@ export default function InvitationView({
                   Xác nhận tham dự
                 </button>
               )}
-              {invite.events.length > 0 && (
+              {has.schedule && (
                 <button
                   className="inv-btn ghost"
                   onClick={() => jump("schedule")}
@@ -169,13 +211,13 @@ export default function InvitationView({
             ))}
           </nav>
         )}
-        {invite.message && (
+        {has.message && (
           <section className="inv-section inv-message inv-reveal">
             <span className="inv-ornament" aria-hidden />
             <p>{invite.message}</p>
           </section>
         )}
-        {invite.events.length > 0 && (
+        {has.schedule && (
           <section className="inv-section inv-reveal" data-section="schedule">
             <p className="inv-label">Lịch trình</p>
             <h2 className="inv-title">{longDate(invite.date)}</h2>
@@ -208,7 +250,7 @@ export default function InvitationView({
             </div>
           </section>
         )}
-        {(invite.venueName || invite.venueAddress) && (
+        {has.venue && (
           <section className="inv-section inv-reveal" data-section="venue">
             <p className="inv-label">Địa điểm</p>
             <h2 className="inv-title">{invite.venueName}</h2>
@@ -239,7 +281,25 @@ export default function InvitationView({
             )}
           </section>
         )}
-        {status !== "off" && (
+        {has.gallery && (
+          <section className="inv-section inv-reveal" data-section="gallery">
+            <p className="inv-label">Album ảnh</p>
+            <h2 className="inv-title">Khoảnh khắc của chúng tôi</h2>
+            <div
+              className={`inv-gallery ${count === 2 ? "pair" : count % 2 ? "odd" : "even"}`}
+            >
+              {invite.gallery.map((ref, index) => (
+                <GalleryPhoto
+                  key={ref}
+                  photoRef={ref}
+                  label={`Xem ảnh ${index + 1}`}
+                  onOpen={preview ? undefined : () => setViewer(index)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+        {has.rsvp && (
           <section className="inv-section inv-reveal" data-section="rsvp">
             <p className="inv-label">Xác nhận tham dự</p>
             <h2 className="inv-title">Bạn sẽ đến chung vui chứ?</h2>
@@ -263,7 +323,7 @@ export default function InvitationView({
             )}
           </section>
         )}
-        {invite.faqs.length > 0 && (
+        {has.faq && (
           <section className="inv-section inv-reveal" data-section="faq">
             <p className="inv-label">Hỏi đáp</p>
             <h2 className="inv-title">Điều bạn cần biết</h2>
@@ -280,7 +340,7 @@ export default function InvitationView({
             </div>
           </section>
         )}
-        {invite.giftNote && (
+        {has.thanks && (
           <section className="inv-section inv-thanks inv-reveal">
             <Gift size={20} className="inv-accent" />
             <h2 className="inv-title">Lời cảm ơn</h2>
@@ -307,6 +367,122 @@ export default function InvitationView({
           </p>
         </footer>
       </article>
+      {viewer !== null && (
+        <PhotoViewer
+          photos={invite.gallery}
+          index={viewer}
+          onIndex={setViewer}
+          onClose={() => setViewer(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function GalleryPhoto({
+  photoRef,
+  label,
+  onOpen,
+}: {
+  photoRef: string;
+  label: string;
+  onOpen?: () => void;
+}) {
+  const src = usePhoto(photoRef);
+  return (
+    <button
+      type="button"
+      className="inv-photo"
+      aria-label={label}
+      onClick={onOpen}
+      tabIndex={onOpen ? 0 : -1}
+    >
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      )}
+    </button>
+  );
+}
+
+// Full-screen album viewer: arrow keys or buttons to browse, Esc to close.
+function PhotoViewer({
+  photos,
+  index,
+  onIndex,
+  onClose,
+}: {
+  photos: string[];
+  index: number;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  const src = usePhoto(photos[index]);
+  const close = useRef<HTMLButtonElement>(null);
+  const step = (delta: number) =>
+    onIndex((index + delta + photos.length) % photos.length);
+  useEffect(() => {
+    const overflow = document.body.style.overflow,
+      opener = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+    close.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      opener?.focus?.();
+    };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") step(1);
+      if (e.key === "ArrowLeft") step(-1);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+  return (
+    <div
+      className="inv-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Ảnh ${index + 1} / ${photos.length}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <button
+        ref={close}
+        className="inv-viewer-close"
+        aria-label="Đóng ảnh"
+        onClick={onClose}
+      >
+        <X size={20} />
+      </button>
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" referrerPolicy="no-referrer" />
+      )}
+      {photos.length > 1 && (
+        <>
+          <button
+            className="inv-viewer-nav prev"
+            aria-label="Ảnh trước"
+            onClick={() => step(-1)}
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <button
+            className="inv-viewer-nav next"
+            aria-label="Ảnh sau"
+            onClick={() => step(1)}
+          >
+            <ChevronRight size={22} />
+          </button>
+          <span className="inv-viewer-count">
+            {index + 1} / {photos.length}
+          </span>
+        </>
+      )}
     </div>
   );
 }

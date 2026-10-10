@@ -2,6 +2,9 @@ import type {
   Invitation,
   InviteEvent,
   InviteFaq,
+  InviteFont,
+  InviteLayout,
+  InviteSection,
   InviteTheme,
   Rsvp,
   RsvpInput,
@@ -16,6 +19,146 @@ export const themeLabels: Record<InviteTheme, string> = {
   blush: "Hồng phấn",
   navy: "Xanh đậm",
   sand: "Vàng cát",
+  terracotta: "Đất nung",
+  lavender: "Oải hương",
+  mono: "Trắng đen",
+  night: "Đêm",
+};
+type Palette = {
+  bg: string;
+  paper: string;
+  ink: string;
+  muted: string;
+  accent: string;
+  soft: string;
+  line: string;
+};
+export const themePalettes: Record<InviteTheme, Palette> = {
+  sage: {
+    bg: "#e9e5dc",
+    paper: "#faf8f3",
+    ink: "#26332c",
+    muted: "#6b786e",
+    accent: "#6f8b72",
+    soft: "#e5ebe1",
+    line: "#e0dcd1",
+  },
+  blush: {
+    bg: "#efe3de",
+    paper: "#fdf9f7",
+    ink: "#3b2a2a",
+    muted: "#85706b",
+    accent: "#ad7268",
+    soft: "#f5e6e1",
+    line: "#eddcd5",
+  },
+  navy: {
+    bg: "#e2e7ee",
+    paper: "#f9fafc",
+    ink: "#1d2738",
+    muted: "#66718a",
+    accent: "#3f5d85",
+    soft: "#e3e9f2",
+    line: "#dde3ec",
+  },
+  sand: {
+    bg: "#ebe2d1",
+    paper: "#fcf9f3",
+    ink: "#362e22",
+    muted: "#7d705f",
+    accent: "#9e7c4a",
+    soft: "#f2e9d8",
+    line: "#e7dcc8",
+  },
+  terracotta: {
+    bg: "#efe0d6",
+    paper: "#fcf7f3",
+    ink: "#3a2720",
+    muted: "#86695d",
+    accent: "#b0603c",
+    soft: "#f6e5da",
+    line: "#ecd9cc",
+  },
+  lavender: {
+    bg: "#e6e2ee",
+    paper: "#faf9fc",
+    ink: "#2c283a",
+    muted: "#6f6984",
+    accent: "#7a67a6",
+    soft: "#ece8f5",
+    line: "#e1dcea",
+  },
+  mono: {
+    bg: "#e7e7e4",
+    paper: "#ffffff",
+    ink: "#161616",
+    muted: "#696969",
+    accent: "#161616",
+    soft: "#f0f0ee",
+    line: "#e3e3e0",
+  },
+  night: {
+    bg: "#0c1110",
+    paper: "#151d1b",
+    ink: "#f2ede2",
+    muted: "#a8b2ac",
+    accent: "#d4b06a",
+    soft: "#1d2826",
+    line: "#2a3633",
+  },
+};
+const rgb = (hex: string) =>
+  [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+export const mixColor = (a: string, b: string, amount: number) =>
+  "#" +
+  rgb(a)
+    .map((v, i) =>
+      Math.round(v * amount + rgb(b)[i] * (1 - amount))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("");
+// CSS variables for an invitation; a custom accent also retints the soft
+// background and rings, computed here so older browsers render the same.
+export function inviteStyle(theme: InviteTheme, accent: string) {
+  const p = { ...themePalettes[theme] };
+  if (/^#[0-9a-fA-F]{6}$/.test(accent)) {
+    p.accent = accent;
+    p.soft = mixColor(accent, p.paper, 0.14);
+  }
+  const [r, g, b] = rgb(p.accent);
+  return {
+    "--inv-bg": p.bg,
+    "--inv-paper": p.paper,
+    "--inv-ink": p.ink,
+    "--inv-muted": p.muted,
+    "--inv-accent": p.accent,
+    "--inv-soft": p.soft,
+    "--inv-line": p.line,
+    "--inv-ring": `rgba(${r}, ${g}, ${b}, 0.38)`,
+    "--inv-ring-2": `rgba(${r}, ${g}, ${b}, 0.18)`,
+  };
+}
+export const fontLabels: Record<InviteFont, string> = {
+  modern: "Hiện đại",
+  elegant: "Thanh lịch",
+  classic: "Cổ điển",
+  minimal: "Tối giản",
+  soft: "Mềm mại",
+};
+export const layoutLabels: Record<InviteLayout, string> = {
+  text: "Chữ",
+  arch: "Khung vòm",
+  photo: "Ảnh tràn",
+};
+export const sectionLabels: Record<InviteSection, string> = {
+  message: "Lời mời",
+  schedule: "Lịch trình",
+  venue: "Địa điểm",
+  gallery: "Album ảnh",
+  rsvp: "Xác nhận tham dự",
+  faq: "Hỏi đáp",
+  thanks: "Lời cảm ơn",
 };
 export const eventPresets = [
   "Lễ gia tiên",
@@ -67,6 +210,12 @@ export function defaultInvitation(wedding: Wedding): Invitation {
     token: null,
     published: false,
     theme: "sage",
+    layout: "text",
+    font: "modern",
+    align: "center",
+    accent: "",
+    gallery: [],
+    hidden: [],
     names: "",
     headline: "Trân trọng kính mời",
     message:
@@ -105,7 +254,13 @@ export type PublicInvitation = {
   message: string;
   lunar: string | null;
   coverUrl: string;
+  gallery: string[];
   theme: InviteTheme;
+  accent: string;
+  layout: InviteLayout;
+  font: InviteFont;
+  align: "center" | "left";
+  hidden: InviteSection[];
   events: InviteEvent[];
   venueName: string;
   venueAddress: string;
@@ -140,7 +295,14 @@ export function publicInvitation(
     message: invitation.message.trim(),
     lunar: invitation.showLunar ? lunarLabel(wedding.date) : null,
     coverUrl: invitation.coverUrl.trim(),
+    gallery: invitation.gallery,
     theme: invitation.theme,
+    accent: invitation.accent,
+    // Photo layouts need a cover photo; without one the text layout is used.
+    layout: invitation.coverUrl.trim() ? invitation.layout : "text",
+    font: invitation.font,
+    align: invitation.align,
+    hidden: invitation.hidden,
     events: invitation.events
       .slice()
       .sort((a, b) => a.time.localeCompare(b.time)),

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
+  ArrowRight,
   CalendarClock,
   Check,
   Copy,
@@ -9,13 +11,17 @@ import {
   FileSpreadsheet,
   HelpCircle,
   Heart,
+  ImagePlus,
   LoaderCircle,
   MailOpen,
   MapPin,
+  Palette,
   Plus,
   Send,
+  Star,
   Trash2,
   UserCheck,
+  X,
 } from "lucide-react";
 import InvitationView from "./InvitationView";
 import {
@@ -23,16 +29,26 @@ import {
   defaultInvitation,
   eventPresets,
   faqTemplates,
+  fontLabels,
+  layoutLabels,
   publicInvitation,
+  sectionLabels,
+  splitNames,
   themeLabels,
+  themePalettes,
 } from "@/lib/invitation";
+import { inviteFontVariables } from "@/lib/fonts";
+import { usePhoto } from "@/lib/invite-photos";
 import { lunarLabel } from "@/lib/lunar";
 import { dateLabel, today } from "@/lib/domain";
 import { sendToSheet } from "@/lib/sheets-client";
 import {
   invitationSchema,
+  inviteFonts,
+  inviteLayouts,
   inviteThemes,
   type Invitation,
+  type InviteSection,
   type Wedding,
 } from "@/lib/types";
 
@@ -44,14 +60,11 @@ type Props = {
   busy: boolean;
   inviteUrl: (invitation: Invitation) => string | null;
   onSave: (next: Invitation, message: string) => Promise<Invitation>;
+  // Compresses and stores a photo, returning its reference for the invitation.
+  onUploadPhoto: (file: File) => Promise<string>;
   notify: (text: string, error?: boolean) => void;
 };
-const swatches: Record<Invitation["theme"], string> = {
-  sage: "#6f8b72",
-  blush: "#b0776d",
-  navy: "#3f5d85",
-  sand: "#a3814f",
-};
+const MAX_PHOTOS = 12;
 
 export default function InvitationStudio({
   wedding,
@@ -61,13 +74,15 @@ export default function InvitationStudio({
   busy,
   inviteUrl,
   onSave,
+  onUploadPhoto,
   notify,
 }: Props) {
   const [draft, setDraft] = useState<Invitation | null>(invitation ?? null),
     [dirty, setDirty] = useState(false),
     [error, setError] = useState(""),
     [pane, setPane] = useState<"edit" | "preview">("edit"),
-    [testing, setTesting] = useState(false);
+    [testing, setTesting] = useState(false),
+    [uploading, setUploading] = useState(false);
   useEffect(() => {
     if (!dirty) setDraft(invitation ?? null);
   }, [invitation, dirty]);
@@ -122,6 +137,62 @@ export default function InvitationStudio({
   const url = inviteUrl(draft);
   const preview = publicInvitation(wedding, draft, teamName);
   const usedFaqs = new Set(draft.faqs.map((f) => f.question));
+  const [firstName, secondName] = splitNames(preview.names);
+  const sample = secondName ? `${firstName} & ${secondName}` : firstName;
+  async function addPhotos(files: FileList | null, target: "cover" | "album") {
+    if (!files?.length || !draft) return;
+    setUploading(true);
+    try {
+      if (target === "cover") {
+        const ref = await onUploadPhoto(files[0]);
+        // A first cover photo switches the text layout to the photo frame.
+        setDraft((d) =>
+          d
+            ? {
+                ...d,
+                coverUrl: ref,
+                layout: d.layout === "text" ? "arch" : d.layout,
+              }
+            : d,
+        );
+      } else {
+        const room = MAX_PHOTOS - draft.gallery.length;
+        for (const file of Array.from(files).slice(0, room)) {
+          const ref = await onUploadPhoto(file);
+          setDraft((d) => (d ? { ...d, gallery: [...d.gallery, ref] } : d));
+        }
+        if (files.length > room)
+          notify(`Album tối đa ${MAX_PHOTOS} ảnh; đã thêm ${room} ảnh đầu.`);
+      }
+      setDirty(true);
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setUploading(false);
+    }
+  }
+  const move = (index: number, delta: number) => {
+    const gallery = draft.gallery.slice();
+    const [photo] = gallery.splice(index, 1);
+    gallery.splice(index + delta, 0, photo);
+    set({ gallery });
+  };
+  const visible = (section: InviteSection) => (
+    <label className="checkbox-label studio-visible">
+      <input
+        type="checkbox"
+        checked={!draft.hidden.includes(section)}
+        onChange={(e) =>
+          set({
+            hidden: e.target.checked
+              ? draft.hidden.filter((h) => h !== section)
+              : [...draft.hidden, section],
+          })
+        }
+      />
+      Hiện mục “{sectionLabels[section]}” trên thiệp
+    </label>
+  );
   return (
     <div className="studio">
       <section className="panel studio-bar">
@@ -219,7 +290,268 @@ export default function InvitationStudio({
       </div>
       <div className={`studio-grid show-${pane}`}>
         <div className="studio-form">
-          <Group title="Lời mời" icon={<Heart size={15} />} open>
+          <Group title="Giao diện" icon={<Palette size={15} />} open>
+            <div className="design-field">
+              <span className="design-label">Bố cục</span>
+              <div className="design-options">
+                {inviteLayouts.map((layout) => (
+                  <button
+                    key={layout}
+                    type="button"
+                    aria-pressed={draft.layout === layout}
+                    className={`design-option ${draft.layout === layout ? "active" : ""}`}
+                    onClick={() => set({ layout })}
+                  >
+                    <span className={`layout-sketch ${layout}`} aria-hidden>
+                      <i />
+                      <b />
+                      <b />
+                    </span>
+                    {layoutLabels[layout]}
+                  </button>
+                ))}
+              </div>
+              {draft.layout !== "text" && !draft.coverUrl && (
+                <small className="field-note">
+                  Thêm ảnh bìa ở mục Ảnh để dùng bố cục này.
+                </small>
+              )}
+            </div>
+            <div className="design-field">
+              <span className="design-label">Kiểu chữ</span>
+              <div className={`design-options fonts ${inviteFontVariables}`}>
+                {inviteFonts.map((font) => (
+                  <button
+                    key={font}
+                    type="button"
+                    aria-pressed={draft.font === font}
+                    className={`design-option font-option inv-font-${font} ${draft.font === font ? "active" : ""}`}
+                    onClick={() => set({ font })}
+                  >
+                    <span className="font-sample">{sample}</span>
+                    <small>{fontLabels[font]}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="design-field">
+              <span className="design-label">Màu sắc</span>
+              <div className="palette-swatches">
+                {inviteThemes.map((theme) => {
+                  const p = themePalettes[theme];
+                  return (
+                    <button
+                      key={theme}
+                      type="button"
+                      title={themeLabels[theme]}
+                      aria-pressed={draft.theme === theme}
+                      className={`palette-swatch ${draft.theme === theme ? "active" : ""}`}
+                      onClick={() => set({ theme })}
+                    >
+                      <i style={{ background: p.paper, borderColor: p.line }}>
+                        <b style={{ background: p.accent }} />
+                      </i>
+                      {themeLabels[theme]}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="accent-row">
+                <label className="accent-picker">
+                  <input
+                    type="color"
+                    value={draft.accent || themePalettes[draft.theme].accent}
+                    onChange={(e) => set({ accent: e.target.value })}
+                  />
+                  {draft.accent
+                    ? `Màu nhấn riêng ${draft.accent}`
+                    : "Chọn màu nhấn riêng"}
+                </label>
+                {draft.accent && (
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => set({ accent: "" })}
+                  >
+                    Dùng màu của bảng
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="design-field">
+              <span className="design-label">Căn chữ</span>
+              <div className="segmented floor-segmented">
+                {(
+                  [
+                    ["center", "Giữa"],
+                    ["left", "Trái"],
+                  ] as const
+                ).map(([align, label]) => (
+                  <button
+                    key={align}
+                    type="button"
+                    aria-pressed={draft.align === align}
+                    className={draft.align === align ? "active" : ""}
+                    onClick={() => set({ align })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Group>
+          <Group
+            title="Ảnh"
+            icon={<ImagePlus size={15} />}
+            badge={`${draft.gallery.length + (draft.coverUrl ? 1 : 0)} ảnh`}
+            open
+          >
+            <div className="design-field">
+              <span className="design-label">Ảnh bìa</span>
+              {draft.coverUrl ? (
+                <div className="cover-pick">
+                  <PhotoThumb
+                    photoRef={draft.coverUrl}
+                    className="cover-thumb"
+                  />
+                  <div className="cover-actions">
+                    <label className="btn small">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        disabled={uploading}
+                        onChange={(e) => {
+                          void addPhotos(e.target.files, "cover");
+                          e.target.value = "";
+                        }}
+                      />
+                      <ImagePlus size={13} />
+                      Đổi ảnh
+                    </label>
+                    <button
+                      type="button"
+                      className="btn small"
+                      onClick={() => set({ coverUrl: "" })}
+                    >
+                      <X size={13} />
+                      Bỏ ảnh bìa
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="photo-drop">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                    disabled={uploading}
+                    onChange={(e) => {
+                      void addPhotos(e.target.files, "cover");
+                      e.target.value = "";
+                    }}
+                  />
+                  <ImagePlus size={20} />
+                  <strong>Chọn ảnh bìa</strong>
+                  <small>
+                    Ảnh được thu nhỏ và xóa thông tin vị trí trước khi lưu
+                  </small>
+                </label>
+              )}
+              <details className="cover-link">
+                <summary>Hoặc dán liên kết ảnh</summary>
+                <input
+                  className="input"
+                  value={
+                    draft.coverUrl.startsWith("https://") ? draft.coverUrl : ""
+                  }
+                  maxLength={500}
+                  inputMode="url"
+                  placeholder="https://…/anh-cuoi.jpg"
+                  onChange={(e) => set({ coverUrl: e.target.value.trim() })}
+                />
+              </details>
+            </div>
+            <div className="design-field">
+              <span className="design-label">
+                Album · {draft.gallery.length}/{MAX_PHOTOS}
+              </span>
+              <div className="album-grid">
+                {draft.gallery.map((ref, i) => (
+                  <div className="album-item" key={ref}>
+                    <PhotoThumb photoRef={ref} />
+                    <div className="album-actions">
+                      <button
+                        type="button"
+                        aria-label="Đưa lên trước"
+                        disabled={i === 0}
+                        onClick={() => move(i, -1)}
+                      >
+                        <ArrowLeft size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Đặt làm ảnh bìa"
+                        title="Đặt làm ảnh bìa"
+                        onClick={() =>
+                          set({
+                            coverUrl: ref,
+                            layout:
+                              draft.layout === "text" ? "arch" : draft.layout,
+                          })
+                        }
+                      >
+                        <Star size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Đưa xuống sau"
+                        disabled={i === draft.gallery.length - 1}
+                        onClick={() => move(i, 1)}
+                      >
+                        <ArrowRight size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Bỏ ảnh khỏi album"
+                        onClick={() =>
+                          set({
+                            gallery: draft.gallery.filter((g) => g !== ref),
+                          })
+                        }
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {draft.gallery.length < MAX_PHOTOS && (
+                  <label className="album-add">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      hidden
+                      disabled={uploading}
+                      onChange={(e) => {
+                        void addPhotos(e.target.files, "album");
+                        e.target.value = "";
+                      }}
+                    />
+                    {uploading ? (
+                      <LoaderCircle size={18} className="spin" />
+                    ) : (
+                      <Plus size={18} />
+                    )}
+                    {uploading ? "Đang tải…" : "Thêm ảnh"}
+                  </label>
+                )}
+              </div>
+              {visible("gallery")}
+            </div>
+          </Group>
+          <Group title="Lời mời" icon={<Heart size={15} />}>
+            {visible("message")}
             <div className="fields">
               <label className="field">
                 Tên hiển thị
@@ -261,39 +593,10 @@ export default function InvitationStudio({
                   </small>
                 </span>
               </label>
-              <div className="field span-2">
-                Màu thiệp
-                <div className="swatches">
-                  {inviteThemes.map((theme) => (
-                    <button
-                      key={theme}
-                      type="button"
-                      aria-pressed={draft.theme === theme}
-                      className={`swatch ${draft.theme === theme ? "active" : ""}`}
-                      onClick={() => set({ theme })}
-                    >
-                      <i style={{ background: swatches[theme] }} />
-                      {themeLabels[theme]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <label className="field span-2">
-                Ảnh bìa (không bắt buộc)
-                <input
-                  value={draft.coverUrl}
-                  maxLength={500}
-                  inputMode="url"
-                  placeholder="https://…/anh-cuoi.jpg"
-                  onChange={(e) => set({ coverUrl: e.target.value.trim() })}
-                />
-                <small>
-                  Dán liên kết trực tiếp tới ảnh. Để trống để dùng nền chữ.
-                </small>
-              </label>
             </div>
           </Group>
           <Group title="Lịch trình" icon={<CalendarClock size={15} />}>
+            {visible("schedule")}
             <p className="field-note" style={{ marginBottom: 12 }}>
               Ngày cưới theo hồ sơ: {dateLabel(wedding.date)}. Sửa ngày trong
               “Sửa hồ sơ”.
@@ -400,6 +703,7 @@ export default function InvitationStudio({
             )}
           </Group>
           <Group title="Địa điểm" icon={<MapPin size={15} />}>
+            {visible("venue")}
             <div className="fields">
               <label className="field">
                 Tên địa điểm
@@ -504,6 +808,7 @@ export default function InvitationStudio({
             </div>
           </Group>
           <Group title="Hỏi đáp" icon={<HelpCircle size={15} />}>
+            {visible("faq")}
             {draft.faqs.map((faq, i) => (
               <div className="studio-faq" key={faq.id}>
                 <div className="between">
@@ -587,6 +892,7 @@ export default function InvitationStudio({
             )}
           </Group>
           <Group title="Lời cảm ơn & liên hệ" icon={<Heart size={15} />}>
+            {visible("thanks")}
             <div className="fields">
               <label className="field span-2">
                 Lời cảm ơn / quà mừng
@@ -717,6 +1023,23 @@ export default function InvitationStudio({
   );
 }
 
+function PhotoThumb({
+  photoRef,
+  className = "",
+}: {
+  photoRef: string;
+  className?: string;
+}) {
+  const src = usePhoto(photoRef);
+  return (
+    <span className={`photo-thumb ${className}`}>
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" referrerPolicy="no-referrer" />
+      )}
+    </span>
+  );
+}
 function Group({
   title,
   icon,

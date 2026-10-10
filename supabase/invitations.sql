@@ -1,4 +1,4 @@
--- Run after schema.sql. Guest answers (RSVP) for online invitations.
+-- Run after schema.sql. Online invitations: guest answers (RSVP) and photos.
 -- Kept outside the revision-checked workspace payload so guest submissions
 -- never conflict with planners' saves.
 create table public.rsvps (
@@ -38,3 +38,9 @@ create policy rsvp_delete on public.rsvps for delete to authenticated
 grant select, insert, update, delete on public.rsvps to authenticated;
 -- Guest answers are written by /api/rsvp with the server-only service role
 -- after the invitation token, publish state and rate limit are checked.
+
+-- Invitation photos are meant for guests, so the bucket is public-read by URL.
+-- There are no storage.objects policies: uploads and deletions only happen in
+-- /api/invite-images after checking team membership, using the service role.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('invitation-images','invitation-images',true,3145728,array['image/jpeg','image/png','image/webp']);

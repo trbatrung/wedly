@@ -133,26 +133,61 @@ export const updateSchema = z.object({
 });
 export const floorItemSchema = z.object({
   id,
-  kind: z.enum(["table", "stage", "entrance"]),
+  kind: z.enum(["table", "stage", "entrance", "aisle"]),
   label: z.string().max(60),
   x: z.number().min(0).max(100),
   y: z.number().min(0).max(100),
   width: z.number().positive().max(100),
   height: z.number().positive().max(100),
   seats: z.number().int().min(0).max(30),
+  // Table group letter ("A", "B"…) so a waiter team or guest party can be
+  // assigned a cluster; empty for stages, aisles and older plans.
+  group: z.string().max(12).default(""),
 });
+export const floorSides = ["none", "groom-left", "bride-left"] as const;
 export const floorplanSchema = z.object({
   weddingId: id,
   width: z.number().min(3).max(100),
   height: z.number().min(3).max(100),
   items: z.array(floorItemSchema).max(300),
+  // Which family sits on each side of the center aisle (stage at the top).
+  sides: z.enum(floorSides).default("none"),
 });
 export type FloorItem = z.infer<typeof floorItemSchema>;
 export type Floorplan = z.infer<typeof floorplanSchema>;
 // A Google Apps Script web app deployed from the couple's own Sheet.
 export const sheetUrlPattern =
   /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{10,}\/exec$/;
-export const inviteThemes = ["sage", "blush", "navy", "sand"] as const;
+export const inviteThemes = [
+  "sage",
+  "blush",
+  "navy",
+  "sand",
+  "terracotta",
+  "lavender",
+  "mono",
+  "night",
+] as const;
+export const inviteFonts = [
+  "modern",
+  "elegant",
+  "classic",
+  "minimal",
+  "soft",
+] as const;
+export const inviteLayouts = ["text", "arch", "photo"] as const;
+export const inviteSections = [
+  "message",
+  "schedule",
+  "venue",
+  "gallery",
+  "rsvp",
+  "faq",
+  "thanks",
+] as const;
+// A photo is a public https URL (live storage or pasted link) or, in the
+// browser-only demo, a photo kept in this browser's IndexedDB.
+export const photoRefPattern = /^(https:\/\/\S+|local:[a-f0-9-]{36})$/;
 export const inviteEventSchema = z.object({
   id,
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Giờ không hợp lệ"),
@@ -170,6 +205,19 @@ export const invitationSchema = z.object({
   token: z.string().uuid().nullable(),
   published: z.boolean(),
   theme: z.enum(inviteThemes),
+  // Design choices; older invitations get the original look.
+  layout: z.enum(inviteLayouts).default("text"),
+  font: z.enum(inviteFonts).default("modern"),
+  align: z.enum(["center", "left"]).default("center"),
+  accent: z
+    .string()
+    .regex(/^(#[0-9a-fA-F]{6})?$/, "Màu nhấn không hợp lệ")
+    .default(""),
+  gallery: z
+    .array(z.string().max(500).regex(photoRefPattern, "Ảnh không hợp lệ"))
+    .max(12, "Album tối đa 12 ảnh")
+    .default([]),
+  hidden: z.array(z.enum(inviteSections)).max(7).default([]),
   // Empty names/venue fall back to the wedding record so the two stay in sync.
   names: z.string().max(120),
   headline: z.string().max(80),
@@ -178,7 +226,10 @@ export const invitationSchema = z.object({
   coverUrl: z
     .string()
     .max(500)
-    .regex(/^(https:\/\/\S+)?$/, "Ảnh bìa cần là liên kết https://"),
+    .refine(
+      (value) => !value || photoRefPattern.test(value),
+      "Ảnh bìa cần là ảnh tải lên hoặc liên kết https://",
+    ),
   events: z.array(inviteEventSchema).max(10),
   venueName: z.string().max(160),
   venueAddress: z.string().max(240),
@@ -208,6 +259,9 @@ export type Invitation = z.infer<typeof invitationSchema>;
 export type InviteEvent = z.infer<typeof inviteEventSchema>;
 export type InviteFaq = z.infer<typeof inviteFaqSchema>;
 export type InviteTheme = (typeof inviteThemes)[number];
+export type InviteFont = (typeof inviteFonts)[number];
+export type InviteLayout = (typeof inviteLayouts)[number];
+export type InviteSection = (typeof inviteSections)[number];
 // What a guest answers on the invitation. `id` is generated on the guest's
 // device so a second submission from that device updates the same answer.
 export const rsvpInputSchema = z.object({
