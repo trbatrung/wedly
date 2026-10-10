@@ -67,7 +67,7 @@ Owner asked for much easier navigation and for online invitations like a hand-bu
 
 Checks run in this worktree: `npm run typecheck` clean, `npm test` 23/23 (12 existing + 11 new), `npm run build` OK. Browser QA on the dev server at 1440px and 390px: palette search/Enter/Back, tab URLs, wedding filter + "Của tôi", invitation create/edit/theme/save/validation, guest-page RSVP submit → appears in guest list with correct headcount, couple portal counts, no horizontal overflow on 12 phone screens, no console/server errors. Live routes verified only for safe failure without Supabase (404/403/503). Not exercised against a configured Supabase project or a real Apps Script deployment.
 
-State: committed on branch `claude/portal-nav-invitation-cd79b3` and pushed straight to `main` at the owner's request. Vercel's GitHub integration builds `main` and aliases production (`wedly-sepia.vercel.app`); the previous production deployment `dpl_ErJK489vuTCm8TDfXHbMa8qp81Ct` was created this way from `afd88fa`.
+Release: commit `e95dffa` pushed straight to `main` at the owner's request (fast-forward from `afd88fa`). Vercel's GitHub integration built production deployment `dpl_B5SPqqMK74J2Y4iv5Qy7evFgBT8j` (Ready, served on `wedly-sepia.vercel.app`). Production checks: `/demo`, `/demo/thiep/minh-anh`, `/demo/share/minh-anh` return 200; unknown `/thiep/<token>` 404; `/api/rsvp` 404 JSON and `/api/rsvps` 503 while Supabase is unconfigured; invitation page sends `noindex`; browser smoke test of the guests tab (6 sample answers) and the invitation page (Be Vietnam Pro loaded, lunar date shown).
 
 ## Open branding discussion
 
